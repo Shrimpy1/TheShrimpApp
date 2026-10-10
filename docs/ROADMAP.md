@@ -228,66 +228,120 @@ Acceptance criteria:
 
 ---
 
-## EPIC E3 — Image processor and safe output
+## EPIC E3 — Image optimization and safe output
 
-### US-005 — Configure image processing options
+### US-005 — Configure processing mode and options
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to configure output dimensions, format, and quality so that the output
-fits my needs.
+**Story:** As a user, I want a default lossless optimization mode and an explicit size-reduction
+mode so that the app never trades away image quality without my choice.
 
 Tasks:
 
-- [ ] Model `ImageProcessingOptions` with maximum dimension, output format, quality, and JPEG
-  background color.
-- [ ] Offer maximum-dimension presets of 1280, 1920, 2560, and 3840 px, plus custom input.
-- [ ] Default lossy quality to 85; constrain accepted values to 1–100.
-- [ ] Offer JPEG, WebP lossy, WebP lossless, and PNG output.
-- [ ] Make the quality control apply only to formats for which it is meaningful; don't imply it
-  controls PNG lossless compression in the same way.
-- [ ] Validate custom values and reject invalid options before processing.
+- [x] Model `ImageProcessingOptions` with `LOSSLESS_OPTIMIZE` as the default and `REDUCE_SIZE` as
+  the explicit size-reduction mode.
+- [x] In `LOSSLESS_OPTIMIZE`, disable resizing and lossy encoding controls; apply eligible lossless
+  optimization automatically.
+- [x] In `REDUCE_SIZE`, provide dimension, format, and lossy-quality settings as specified in
+  `SPEC.md`.
+- [x] Apply supported final lossless optimization automatically in both modes; do not expose
+  encoder-specific controls.
+- [x] Validate options so that selecting `LOSSLESS_OPTIMIZE` cannot trigger resizing or lossy
+  encoding.
 
 Acceptance criteria:
 
-- User can change processing settings.
-- The selected options are passed to the processor as a coherent model.
-- Invalid settings cannot start a batch.
+- Lossless Optimize is the default and needs no encoder-specific user configuration.
+- User must explicitly choose Reduce Size mode to resize or use lossy encoding.
+- Invalid/incompatible settings cannot start processing.
+- The selected mode controls which transformations are permitted; applicable lossless final
+  optimization is shared by both modes.
 
-### US-006 — Resize and convert one image
+### US-006 — Losslessly optimize one image
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to resize and convert an image so that I can reduce its dimensions and
-file size.
+**Story:** As a user, I want an image optimized without changing its decoded visual content so that
+I can reduce file size without sacrificing image quality.
 
 Tasks:
 
-- [ ] Create an `ImageProcessor` independent of Compose and screen classes.
-- [ ] Inspect image bounds before decoding the full bitmap.
-- [ ] Use sampled decoding for large inputs where appropriate.
+- [ ] Define a `LosslessImageOptimizer` interface separate from Compose and the ViewModel.
+- [ ] Evaluate Android-compatible format-specific implementations for PNG (for example, Oxipng or an
+  equivalent) and JPEG (for example, `jpegtran`/libjpeg-turbo or an equivalent); review license,
+  maintenance, Android ABI/NDK support, APK impact, and build complexity before choosing.
+- [ ] Do not assume a desktop CLI binary can run directly on Android; integrate a supported
+  library/binding or choose a compatible alternative.
+- [ ] Optimize PNG encoding losslessly without enabling transformations that change pixel data or
+  strip metadata by default.
+- [ ] Optimize JPEG bitstreams without decoding/re-encoding JPEG through a bitmap in lossless mode.
+- [ ] Automatically evaluate compatible lossless format alternatives (for example, PNG to WebP
+  lossless) when content, transparency, rendering semantics, and required metadata can be preserved;
+  compare actual sizes.
+- [ ] Preserve dimensions, alpha/transparency, color interpretation, and orientation semantics.
+- [ ] Preserve metadata by default; apply metadata stripping only when the user enables the separate
+  option.
+- [ ] Keep the original unchanged if no supported optimizer exists, an optimization fails, or the
+  candidate is not strictly smaller.
+- [ ] Return structured result status: optimized, unchanged/no savings, unsupported, or failed.
+- [ ] Design the lossless optimizer so its format-specific optimization capability can also be
+  invoked on the final encoded output produced by US-007, without requiring the original source to
+  be optimized first.
+
+Acceptance criteria:
+
+- Pixel-level comparison tests show that each supported lossless optimization preserves decoded
+  image content.
+- Dimensions, transparency, and color/orientation handling remain correct.
+- An output is accepted as an optimization only if valid and strictly smaller than the source.
+- Optimizer failure never triggers an implicit lossy fallback.
+
+### US-007 — Resize and convert one image in Reduce Size mode
+
+**Priority:** P0 · **Milestone:** M3
+
+**Story:** As a user, I want to resize or re-encode an image when I explicitly choose to prioritize
+smaller size over perfect pixel preservation.
+
+Tasks:
+
+- [ ] Create the `ImageProcessor` for the Reduce Size pipeline, independent of Compose and screen
+  classes.
+- [ ] Inspect bounds before decoding a full bitmap and use sampled decoding for large inputs where
+  appropriate.
 - [ ] Read EXIF orientation and ensure output orientation is visually correct.
-- [ ] Calculate scale from the longest side, preserving aspect ratio and never upscaling by default.
-- [ ] Implement JPEG, WebP lossy, WebP lossless, and PNG output using Android bitmap APIs.
+- [ ] Calculate scale from the longest side, preserve aspect ratio, and never upscale by default.
+- [ ] Implement JPEG, WebP lossy, WebP lossless, and PNG output using Android bitmap APIs where
+  appropriate.
 - [ ] Composite transparent input onto the configured background when outputting JPEG.
 - [ ] Make bitmap lifecycle and memory use explicit; don't retain full-resolution bitmaps beyond
   processing.
-- [ ] Return structured success/failure information rather than crashing the batch for a single bad
-  file.
+- [ ] Return structured success/failure information and actual output metadata; don't crash the
+  batch for one bad file.
+- [ ] After producing the final encoded candidate, run applicable format-specific lossless
+  post-optimization when supported.
+- [ ] Compare the post-optimized candidate with the pre-optimized output and use it only if valid
+  and strictly smaller.
+- [ ] If post-optimization fails, retain the valid pre-optimized output; do not fail an otherwise
+  successful image operation.
 
 Acceptance criteria:
 
-- A single valid image produces output with correct dimensions and orientation.
+- A single valid image produces correctly oriented output with expected dimensions.
 - Aspect ratio is preserved and no-upscaling behavior works.
 - JPEG output has a defined background when the input contains transparency.
+- Lossy behavior occurs only in Reduce Size mode.
 - Unsupported or corrupted input produces a handled error.
+- Lossless post-optimization does not alter the decoded pixel content of the encoded candidate and
+  never replaces it with an invalid or larger file.
 
-### US-007 — Save output safely
+### US-008 — Save output safely
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to choose an output location and save a new optimized file so that the
-source remains safe.
+**Story:** As a user, I want to choose an output location and save a new result so that the source
+remains safe.
 
 Tasks:
 
@@ -300,19 +354,23 @@ Tasks:
   overwrite.
 - [ ] Check stream and provider operation results; clean up incomplete outputs when possible.
 - [ ] Verify the output was written and obtain actual output size.
-- [ ] Keep the original untouched by default.
+- [ ] In Lossless Optimize, avoid writing a duplicate output when no smaller valid candidate is
+  available; report “already optimized” or “no lossless savings.”
+- [ ] Keep the original untouched by default; any original deletion must be an explicit later action
+  after output validation.
 
 Acceptance criteria:
 
 - User can save output into an authorized writable location.
 - Existing files aren't silently overwritten.
 - Failed writes are reported and the original remains intact.
+- Lossless mode does not produce a larger “optimized” copy by default.
 
 ---
 
 ## EPIC E4 — Batch processing and results
 
-### US-008 — Process a batch with progress and cancellation
+### US-009 — Process a batch with progress and cancellation
 
 **Priority:** P0 · **Milestone:** M4
 
@@ -321,9 +379,10 @@ have to repeat the same operation manually.
 
 Tasks:
 
-- [ ] Implement sequential processing of the queue.
-- [ ] Run decode, resize, compression, and file I/O off the main thread using appropriate coroutine
-  dispatchers.
+- [ ] Implement sequential processing of the queue, applying the selected mode consistently to every
+  file.
+- [ ] Run lossless optimization or Reduce Size decode/resize/encoding and file I/O off the main
+  thread using appropriate coroutine dispatchers.
 - [ ] Prevent accidental duplicate concurrent launches.
 - [ ] Model batch status, completed count, current filename, per-file result, and cancellation
   status.
@@ -341,7 +400,7 @@ Acceptance criteria:
   completion.
 - One input failure does not prevent later queued files from being attempted.
 
-### US-009 — Show accurate processing results
+### US-010 — Show accurate processing results
 
 **Priority:** P0 · **Milestone:** M4
 
@@ -350,7 +409,8 @@ result of a batch.
 
 Tasks:
 
-- [ ] Record original bytes and actual output bytes for each successful image.
+- [ ] Record original bytes and actual output bytes for each successful image, plus whether it was
+  losslessly optimized, reduced in size, unchanged/no savings, skipped, or failed.
 - [ ] Calculate per-image byte difference and percentage change.
 - [ ] Calculate aggregate input/output totals using only successfully processed files.
 - [ ] Handle cases where output is larger than input and avoid misleading savings claims.
@@ -361,13 +421,13 @@ Acceptance criteria:
 
 - Reported sizes match the actual output files.
 - Larger outputs are shown as larger rather than represented as savings.
-- Failed and canceled items are clearly distinguished from successful ones.
+- Failed and cancelled items are clearly distinguished from successful ones.
 
 ---
 
 ## EPIC E5 — File management
 
-### US-010 — Browse an authorized directory
+### US-011 — Browse an authorized directory
 
 **Priority:** P0 · **Milestone:** M5
 
@@ -389,7 +449,7 @@ Acceptance criteria:
 - Files and folders are distinguishable.
 - Invalid or revoked access does not crash the screen.
 
-### US-011 — Create directories and rename files
+### US-012 — Create directories and rename files
 
 **Priority:** P0 · **Milestone:** M5
 
@@ -408,7 +468,7 @@ Acceptance criteria:
 - Creation and rename succeed when the provider supports them.
 - Failed operations leave the displayed state accurate and provide an error message.
 
-### US-012 — Delete files after confirmation
+### US-013 — Delete files after confirmation
 
 **Priority:** P0 · **Milestone:** M5
 
@@ -433,7 +493,7 @@ Acceptance criteria:
 
 ## EPIC E6 — Preferences and UX refinement
 
-### US-013 — Remember default processing options
+### US-014 — Remember default processing options
 
 **Priority:** P1 · **Milestone:** M6
 
@@ -443,8 +503,10 @@ time.
 Tasks:
 
 - [ ] Add Preferences DataStore only when the preference requirements are clear.
-- [ ] Persist output format, quality, max dimension, and JPEG background color.
-- [ ] Load defaults as observable state and handle missing or invalid values safely.
+- [ ] Persist processing mode, output format, quality, max dimension, JPEG background color, and
+  metadata-removal preference.
+- [ ] Default to `LOSSLESS_OPTIMIZE`; load settings as observable state and handle missing or
+  invalid values safely.
 - [ ] Keep sensitive or large image data out of preferences.
 
 Acceptance criteria:
@@ -452,7 +514,7 @@ Acceptance criteria:
 - Saved defaults persist after app restart.
 - A fresh install or missing preference uses sensible defaults.
 
-### US-014 — Handle all screen states clearly
+### US-015 — Handle all screen states clearly
 
 **Priority:** P1 · **Milestone:** M6
 
@@ -483,11 +545,17 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules.
+- [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules in Reduce Size
+  mode.
+- [ ] Test lossless optimizer invariants: decoded pixel equality, unchanged dimensions,
+  transparency, color/orientation semantics, and metadata policy.
+- [ ] Test that equal/larger lossless candidates are discarded and originals remain unchanged.
 - [ ] Test output naming and duplicate-name policy.
 - [ ] Test size-difference calculations when output is smaller, equal, or larger.
 - [ ] Test corrupt/unsupported inputs and per-file failure handling.
 - [ ] Test ViewModel state transitions and cancellation behavior.
+- [ ] Test the shared post-optimization stage in both modes, verifying pixel preservation, fallback
+  behavior, and the rule that a candidate is accepted only when valid and strictly smaller.
 
 Acceptance criteria:
 
@@ -503,7 +571,10 @@ Tasks:
 - [ ] Test Photo Picker selection and cancellation.
 - [ ] Test SAF tree selection and retained permissions.
 - [ ] Test read/write, folder creation, rename, and delete with supported providers.
-- [ ] Test JPEG, PNG transparency, WebP lossy/lossless, and EXIF orientation.
+- [ ] Test JPEG, PNG transparency, WebP lossy/lossless, and EXIF orientation in Reduce Size mode.
+- [ ] Test each integrated lossless optimizer against known inputs and compare decoded pixels with
+  the source.
+- [ ] Test that metadata is preserved by default and stripped only when the user opts in.
 - [ ] Test large images and a multi-image batch for UI responsiveness and memory use.
 - [ ] Test revoked permission, unwritable folder, duplicate names, insufficient storage, and
   cancellation.
@@ -539,21 +610,24 @@ unless a dependency clearly allows parallel work.
 
 1. [ ] **Project bootstrapping:** EN-001, EN-002, EN-003.
 2. [ ] **Shell:** US-001 — Home and navigation destinations.
-3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
-4. [x] **Input:** US-003 — Photo Picker and queue.
-5. [x] **Folder authorization:** US-004 — SAF tree selection and metadata.
-6. [ ] **Options model/UI:** US-005 — dimensions, format, quality, transparency behavior.
-7. [ ] **Processor:** US-006 — first get one image correctly processed.
-8. [ ] **Output:** US-007 — choose destination and safely write one output.
-9. [ ] **Batch engine:** US-008 — sequential processing, progress, cancellation, per-file status.
-10. [ ] **Results:** US-009 — accurate file sizes and aggregate summary.
-11. [ ] **Files screen:** US-010, then US-011 and US-012.
-12. [ ] **Preferences and polish:** US-013, US-014.
-13. [ ] **Hardening and local release:** EN-004, EN-005, EN-006.
+3. [ ] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
+4. [ ] **Input:** US-003 — Photo Picker and queue.
+5. [ ] **Folder authorization:** US-004 — SAF tree selection and metadata.
+6. [ ] **Processing options:** US-005 — default Lossless Optimize mode and explicit Reduce Size
+   mode.
+7. [ ] **Lossless processing:** US-006 — integrate/test format-specific optimizers and keep only
+   smaller valid candidates.
+8. [ ] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Reduce Size mode.
+9. [ ] **Output:** US-008 — choose destination and safely write output.
+10. [ ] **Batch engine:** US-009 — sequential processing, progress, cancellation, per-file status.
+11. [ ] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.
+12. [ ] **Files screen:** US-011, then US-012 and US-013.
+13. [ ] **Preferences and polish:** US-014, US-015.
+14. [ ] **Hardening and local release:** EN-004, EN-005, EN-006.
 
-A useful early vertical slice is: **select one image → resize/convert it → save a new output →
-verify the resulting file**. This validates the most technically uncertain path before building the
-batch UI around it.
+A useful early vertical slice is: **select one image → run Lossless Optimize → verify pixel
+preservation and whether the output is smaller → save the result**. Follow it with a separate Reduce
+Size path for images that need dimension or lossy compression changes.
 
 ---
 
@@ -566,12 +640,19 @@ verified:
 - [ ] Home, Image Optimizer, and Files are navigable within one Activity.
 - [ ] Hilt constructs ViewModels and their dependencies.
 - [ ] User can select image files or a SAF-authorized folder.
+- [ ] Lossless Optimize is the default mode and never resizes or uses lossy encoding.
+- [ ] Supported lossless optimizers preserve decoded image pixels, dimensions, transparency, and
+  required color/orientation semantics.
+- [ ] A lossless output is retained only when valid and strictly smaller than the original;
+  equal/larger candidates leave the original unchanged and are reported as no savings.
+- [ ] Reduce Size mode is explicit and supports JPEG, PNG, and WebP inputs with appropriate
+  resize/encoding settings.
 - [ ] Multiple JPEG, PNG, and WebP images can be processed in a batch.
-- [ ] Output dimensions preserve aspect ratio and avoid upscaling by default.
-- [ ] JPEG and WebP output work with the chosen settings; PNG transparency behavior is defined.
 - [ ] Output is written to an authorized writable location and originals are preserved by default.
+- [ ] Metadata is preserved by default and removed only through the explicit metadata option.
 - [ ] Progress, cancellation, per-file errors, and partial success are reported accurately.
-- [ ] Actual file sizes and total reduction are calculated from written outputs.
+- [ ] Actual file sizes and total reduction are calculated from written outputs; no-savings and
+  larger-output cases are represented honestly.
 - [ ] Files can be listed, and create/rename/delete work where supported by the selected provider.
 - [ ] Core offline workflow is tested on the target phone.
 - [ ] A local APK can be installed and launched.
@@ -581,6 +662,8 @@ verified:
 Do not implement these as part of the first pass unless the scope changes:
 
 - [ ] Recursive processing through all subfolders (first decide whether it is needed).
+- [ ] AVIF/HEIF encoding and format benchmarking; evaluate platform codec availability,
+  compatibility, and file-size/quality trade-offs before adding.
 - [ ] Processing history or a database of prior runs.
 - [ ] WorkManager/background processing that must survive process termination.
 - [ ] Video conversion, including WebM output.

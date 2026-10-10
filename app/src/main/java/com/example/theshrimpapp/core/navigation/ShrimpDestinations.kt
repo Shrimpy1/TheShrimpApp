@@ -30,7 +30,9 @@ sealed class ShrimpTopLevelDestination(
         label = "Optimizer",
         selectedIcon = Icons.Filled.PhotoLibrary,
         unselectedIcon = Icons.Outlined.PhotoLibrary
-    )
+    ) {
+        const val OUTPUT_ROUTE = "image_optimizer_output"
+    }
 
     object Files : ShrimpTopLevelDestination(
         route = "files",
@@ -45,5 +47,12 @@ sealed class ShrimpTopLevelDestination(
         const val HOME_ROUTE = "home"
         const val IMAGE_OPTIMIZER_ROUTE = "image_optimizer"
         const val FILES_ROUTE = "files"
+
+        fun fromRoute(route: String?): ShrimpTopLevelDestination {
+            return when (route) {
+                ImageOptimizer.OUTPUT_ROUTE -> ImageOptimizer
+                else -> ALL.find { it.route == route } ?: Home
+            }
+        }
     }
 }

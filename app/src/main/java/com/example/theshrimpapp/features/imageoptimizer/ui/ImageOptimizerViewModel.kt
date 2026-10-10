@@ -8,6 +8,10 @@ import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
+import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -119,7 +123,7 @@ class ImageOptimizerViewModel @Inject constructor(
                         }
                     }
                 } catch (_: Exception) {
-                    // Ignore query failures, fallback to uri last path segment
+                    // Ignore query failures
                 }
                 if (name == null) {
                     name = uri.lastPathSegment ?: "Unknown image"
@@ -173,16 +177,95 @@ class ImageOptimizerViewModel @Inject constructor(
         }
     }
 
-    fun updateMaxDimension(dimension: Int) {
-        _uiState.update { it.copy(maxDimension = dimension) }
+    fun updateProcessingMode(mode: ProcessingMode) {
+        _uiState.update { it.copy(processingMode = mode, optionsError = null) }
     }
 
-    fun updateOutputFormat(format: String) {
+    fun updateMaxDimension(dimension: Int) {
+        val clamped = dimension.coerceIn(1, 10000)
+        _uiState.update {
+            it.copy(
+                maxDimension = clamped,
+                maxDimensionInput = clamped.toString(),
+                optionsError = null
+            )
+        }
+    }
+
+    fun updateMaxDimensionInput(input: String) {
+        val parsed = input.toIntOrNull()
+        if (parsed != null && parsed in 1..10000) {
+            _uiState.update {
+                it.copy(
+                    maxDimension = parsed,
+                    maxDimensionInput = input,
+                    optionsError = null
+                )
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    maxDimensionInput = input,
+                    optionsError = "Max dimension must be between 1 and 10,000 px"
+                )
+            }
+        }
+    }
+
+    fun updateOutputFormat(format: OutputFormat) {
         _uiState.update { it.copy(outputFormat = format) }
     }
 
     fun updateQuality(quality: Int) {
-        _uiState.update { it.copy(quality = quality) }
+        val clamped = quality.coerceIn(1, 100)
+        _uiState.update {
+            it.copy(
+                quality = clamped,
+                qualityInput = clamped.toString(),
+                optionsError = null
+            )
+        }
+    }
+
+    fun updateQualityInput(input: String) {
+        val parsed = input.toIntOrNull()
+        if (parsed != null && parsed in 1..100) {
+            _uiState.update {
+                it.copy(
+                    quality = parsed,
+                    qualityInput = input,
+                    optionsError = null
+                )
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    qualityInput = input,
+                    optionsError = "Quality must be between 1 and 100"
+                )
+            }
+        }
+    }
+
+    fun updateJpegBackgroundColor(color: JpegBackgroundColor) {
+        _uiState.update { it.copy(jpegBackgroundColor = color) }
+    }
+
+    fun updatePreserveMetadata(preserve: Boolean) {
+        _uiState.update { it.copy(preserveMetadata = preserve) }
+    }
+
+    fun getProcessingOptions(): ImageProcessingOptions? {
+        val state = _uiState.value
+        val options = ImageProcessingOptions(
+            processingMode = state.processingMode,
+            maxDimension = state.maxDimension,
+            outputFormat = state.outputFormat,
+            quality = state.quality,
+            backgroundColor = state.jpegBackgroundColor.color,
+            preserveMetadata = state.preserveMetadata
+        )
+        return if (options.isValid()) options else null
     }
 
     fun setStatusMessage(message: String) {

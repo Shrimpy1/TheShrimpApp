@@ -101,11 +101,6 @@ fun ImageOptimizerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "Image Optimizer",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-
             // Action Buttons Row (Select Images & Select Folder)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -120,12 +115,16 @@ fun ImageOptimizerScreen(
                     modifier = Modifier.weight(1f),
                     enabled = !uiState.isLoading
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text(text = "Select Images")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null
+                        )
+                        Text(text = "Select Images")
+                    }
                 }
 
                 Button(
@@ -135,12 +134,16 @@ fun ImageOptimizerScreen(
                     modifier = Modifier.weight(1f),
                     enabled = !uiState.isLoading
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.FolderOpen,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text(text = "Select Folder")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = null
+                        )
+                        Text(text = "Select Folder")
+                    }
                 }
             }
 
@@ -177,11 +180,20 @@ fun ImageOptimizerScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = "Count", style = MaterialTheme.typography.labelMedium)
-                                Text(text = "${uiState.selectedImages.size}", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = "${uiState.selectedImages.size}",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Total Size", style = MaterialTheme.typography.labelMedium)
-                                Text(text = totalSizeStr, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = "Total Size",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Text(
+                                    text = totalSizeStr,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                             }
                         }
 

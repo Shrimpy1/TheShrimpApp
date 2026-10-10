@@ -2,57 +2,326 @@ package com.example.theshrimpapp.features.imageoptimizer.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OutputSelectionScreen(
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Output Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Top Bar Header with Back Button (avoids nested Scaffold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back"
+                )
+            }
+            Text(
+                text = "Output Settings",
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+
+        if (uiState.optionsError != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = uiState.optionsError ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+
+        // Processing Mode Selection (Lossless Optimize vs Reduce Size)
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Processing Mode",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                ProcessingMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RadioButton(
+                            selected = uiState.processingMode == mode,
+                            onClick = { viewModel.updateProcessingMode(mode) }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = when (mode) {
+                                    ProcessingMode.LOSSLESS_OPTIMIZE -> "Lossless Optimize (Default)"
+                                    ProcessingMode.REDUCE_SIZE -> "Reduce Size (Resize & Compress)"
+                                },
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = when (mode) {
+                                    ProcessingMode.LOSSLESS_OPTIMIZE -> "Reduces file size without changing decoded pixels. No resizing or lossy compression."
+                                    ProcessingMode.REDUCE_SIZE -> "Resizes dimensions, changes formats, and applies lossy compression."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // If Reduce Size mode is selected, show dimension, format, and quality controls
+        if (uiState.processingMode == ProcessingMode.REDUCE_SIZE) {
+            // 1. Output Format Selection
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Output Format",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    OutputFormat.entries.forEach { format ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            RadioButton(
+                                selected = uiState.outputFormat == format,
+                                onClick = { viewModel.updateOutputFormat(format) }
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = format.displayName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                val desc = when (format) {
+                                    OutputFormat.JPEG -> "Lossy compression, universal compatibility, no transparency."
+                                    OutputFormat.WEBP_LOSSY -> "Modern lossy WebP, smaller file sizes, good quality."
+                                    OutputFormat.WEBP_LOSSLESS -> "Lossless WebP, preserves exact pixel data."
+                                    OutputFormat.PNG -> "Lossless PNG, preserves transparency."
+                                }
+                                Text(
+                                    text = desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Maximum Dimension Selection & Presets
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Maximum Dimension",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Resizes the longest side to fit within this limit, preserving aspect ratio without upscaling.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Presets row
+                    val presets = listOf(1280, 1920, 2560, 3840)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presets.forEach { preset ->
+                            FilterChip(
+                                selected = uiState.maxDimension == preset,
+                                onClick = { viewModel.updateMaxDimension(preset) },
+                                label = { Text("$preset px") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = uiState.maxDimensionInput,
+                        onValueChange = { viewModel.updateMaxDimensionInput(it) },
+                        label = { Text("Custom Dimension (px)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // 3. Quality Control (if format supports quality)
+            if (uiState.outputFormat.supportsQuality) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Compression Quality (${uiState.quality})",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Controls lossy compression encoder setting (1-100). Higher quality = larger file size.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Slider(
+                            value = uiState.quality.toFloat(),
+                            onValueChange = { viewModel.updateQuality(it.toInt()) },
+                            valueRange = 1f..100f,
+                            steps = 98,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.qualityInput,
+                            onValueChange = { viewModel.updateQualityInput(it) },
+                            label = { Text("Quality (1 - 100)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
                         )
                     }
                 }
-            )
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            }
+
+            // 4. JPEG Background Color (if format is JPEG)
+            if (uiState.outputFormat == OutputFormat.JPEG) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Transparency Background (JPEG)",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "JPEG does not support alpha transparency. Transparent areas will be filled with this background color.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        JpegBackgroundColor.entries.forEach { bgColor ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = uiState.jpegBackgroundColor == bgColor,
+                                    onClick = { viewModel.updateJpegBackgroundColor(bgColor) }
+                                )
+                                Text(
+                                    text = bgColor.displayName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Metadata Preservation Settings (shared across modes)
+        Card(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "Output selection settings will appear here.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Preserve Metadata (EXIF)",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Keeps orientation, creation date, and camera metadata in output files.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = uiState.preserveMetadata,
+                    onCheckedChange = { viewModel.updatePreserveMetadata(it) }
+                )
+            }
         }
     }
 }

@@ -10,18 +10,25 @@
 
 ## 1. Overview
 
-The Shrimp App is an Android app for hosting multiple small tools in one application. The first feature - which this specification covers - is an image optimizer that can batch-resize, compress, convert, and manage image files. Additional utilities may be added later without requiring a fundamental architectural rewrite.
+The Shrimp App is an Android app for hosting multiple small tools in one application. The first
+feature - which this specification covers - is an image optimizer that can batch-resize, compress,
+convert, and manage image files. Additional utilities may be added later without requiring a
+fundamental architectural rewrite.
 
-The app is intended for personal use and is not initially intended for public distribution. It should remain usable offline for its core features. Images and files should remain on the device unless the user explicitly shares or exports them through Android's system interfaces.
+The app is intended for personal use and is not initially intended for public distribution. It
+should remain usable offline for its core features. Images and files should remain on the device
+unless the user explicitly shares or exports them through Android's system interfaces.
 
 ### Goals
 
 - Reduce image dimensions and file sizes.
 - Convert images between supported formats.
-- Process one image or multiple images in a batch. Handle failures on a per-file basis without crashing the app or losing progress. Show actual output sizes and total savings.
+- Process one image or multiple images in a batch. Handle failures on a per-file basis without
+  crashing the app or losing progress. Show actual output sizes and total savings.
 - Show progress and allow cancellation of a batch.
 - Read and write files in folders the user has authorized.
-- Create directories, rename files, and delete files where the selected storage provider supports those operations.
+- Create directories, rename files, and delete files where the selected storage provider supports
+  those operations.
 - Let user decide where to save outputs and whether to preserve originals.
 - Establish an extensible foundation for additional personal utilities.
 
@@ -58,30 +65,43 @@ The app is intended for personal use and is not initially intended for public di
 | Preferences                         | Preferences DataStore                                           | Persist user defaults when implemented                                       |
 | Testing                             | JUnit, coroutine testing, Compose UI tests                      | Test core processing and critical UI flows                                   |
 
-Use compatible stable library versions supported by the installed Android Studio and Android Gradle Plugin. Keep versions centrally managed where the project template provides a version catalog. Avoid adding libraries without a concrete requirement.
+Use compatible stable library versions supported by the installed Android Studio and Android Gradle
+Plugin. Keep versions centrally managed where the project template provides a version catalog. Avoid
+adding libraries without a concrete requirement.
 
 ### Android SDK configuration
 
-- **`minSdk`: 30 (Android 11).** This is the chosen initial baseline for this private app and enables use of explicit `WEBP_LOSSY` and `WEBP_LOSSLESS` bitmap compression formats without a legacy WebP-format fallback for older Android versions.
-- **`compileSdk`: 36 initially**, or the latest stable SDK supported by the project's Android Gradle Plugin and development environment.
-- **`targetSdk`: 36 initially**, or the current stable target recommended by Android Studio when the project is created or upgraded.
+- **`minSdk`: 30 (Android 11).** This is the chosen initial baseline for this private app and
+  enables use of explicit `WEBP_LOSSY` and `WEBP_LOSSLESS` bitmap compression formats without a
+  legacy WebP-format fallback for older Android versions.
+- **`compileSdk`: 36 initially**, or the latest stable SDK supported by the project's Android Gradle
+  Plugin and development environment.
+- **`targetSdk`: 36 initially**, or the current stable target recommended by Android Studio when the
+  project is created or upgraded.
 
-`minSdk`, `compileSdk`, and `targetSdk` serve different purposes. Raising `minSdk` only raises the oldest Android version on which the app can install; it does not inherently improve runtime performance. Reassess the baseline if the app is later used on other devices or a dependency requires a higher API level.
+`minSdk`, `compileSdk`, and `targetSdk` serve different purposes. Raising `minSdk` only raises the
+oldest Android version on which the app can install; it does not inherently improve runtime
+performance. Reassess the baseline if the app is later used on other devices or a dependency
+requires a higher API level.
 
 ---
 
 ## 3. Application and Navigation Architecture
 
-Use a **single `MainActivity`** that hosts the Compose UI and navigation graph. Do not create a separate Activity for every screen.
+Use a **single `MainActivity`** that hosts the Compose UI and navigation graph. Do not create a
+separate Activity for every screen.
 
 ### Initial navigation destinations
 
 1. **Home** — lists the utilities available in the app.
-2. **Image Optimizer** — select images or a folder, configure options, process images, and view results.
+2. **Image Optimizer** — select images or a folder, configure options, process images, and view
+   results.
 3. **Files** — browse a user-authorized folder and perform supported file operations.
 4. **Settings** — app-wide preferences, added when needed.
 
-The image optimizer can initially use one destination for image selection, settings, processing progress, and completion results. Split these into separate navigation destinations only if that improves the workflow. A processing-history screen is optional and outside the initial scope.
+The image optimizer can initially use one destination for image selection, settings, processing
+progress, and completion results. Split these into separate navigation destinations only if that
+improves the workflow. A processing-history screen is optional and outside the initial scope.
 
 ### Navigation behavior
 
@@ -89,13 +109,15 @@ The image optimizer can initially use one destination for image selection, setti
 - The user can open a utility and return using normal back navigation.
 - Each screen has a clearly defined responsibility.
 - Navigation destinations should not depend directly on other screens' internal UI state.
-- When another app shares or opens images through an Android intent, the app may route those inputs to the Image Optimizer destination. This does not require a second Activity by default.
+- When another app shares or opens images through an Android intent, the app may route those inputs
+  to the Image Optimizer destination. This does not require a second Activity by default.
 
 ---
 
 ## 4. Architecture and Code Organization
 
-Use feature-oriented packages in a single Gradle application module. The following is a starting structure, not a requirement to create empty packages or classes before they are needed.
+Use feature-oriented packages in a single Gradle application module. The following is a starting
+structure, not a requirement to create empty packages or classes before they are needed.
 
 ```text
 com.example.theshrimpapp/
@@ -134,26 +156,33 @@ com.example.theshrimpapp/
 ### Layer responsibilities
 
 **UI**
+
 - Compose screens and reusable UI components.
 - ViewModels and immutable UI state.
 - User events, progress display, validation feedback, and error presentation.
 
 **Domain**
+
 - Processing options, validation rules, and business rules.
 - Use cases or repository contracts where they add clarity or testability.
-- Should avoid Android UI dependencies; keep Android-specific types out of domain models when practical.
+- Should avoid Android UI dependencies; keep Android-specific types out of domain models when
+  practical.
 
 **Data / processing**
+
 - Image decoding, resizing, orientation handling, compression, and output generation.
 - Folder access, content URI handling, and storage operations.
 - Implementations of interfaces consumed by UI/domain code, where interfaces are useful.
 
 **Core**
+
 - App-wide navigation and shared UI/theme elements.
 - Shared storage abstractions, if multiple features need them.
 - Hilt modules and common infrastructure.
 
-A repository is not mandatory just because the app uses MVVM. Start with the smallest structure that creates clear boundaries; introduce an abstraction when it separates responsibilities or materially improves testing.
+A repository is not mandatory just because the app uses MVVM. Start with the smallest structure that
+creates clear boundaries; introduce an abstraction when it separates responsibilities or materially
+improves testing.
 
 ### MVVM dependency direction
 
@@ -180,7 +209,8 @@ Hilt constructs and supplies dependencies; it is not a service locator.
 
 ## 5. Dependency Injection
 
-Use Hilt from the start. It should manage construction and scoping of application dependencies; it should not be used as a service locator that arbitrary classes query at runtime.
+Use Hilt from the start. It should manage construction and scoping of application dependencies; it
+should not be used as a service locator that arbitrary classes query at runtime.
 
 ### Conventions
 
@@ -188,14 +218,21 @@ Use Hilt from the start. It should manage construction and scoping of applicatio
 - Annotate `MainActivity` with `@AndroidEntryPoint`.
 - Use `@HiltViewModel` and constructor injection for ViewModels.
 - Use `@Inject` constructors for ordinary classes Hilt can construct automatically.
-- Use `@Provides` when constructing dependencies that need configuration or originate from Android APIs, such as `ContentResolver`.
+- Use `@Provides` when constructing dependencies that need configuration or originate from Android
+  APIs, such as `ContentResolver`.
 - Use `@Binds` when mapping an interface to an implementation.
-- Use scopes only when a shared lifetime is required; do not mark everything `@Singleton` by default.
-- Prefer constructor injection over service-locator patterns or calls to a global container from arbitrary classes.
-- Do not create a Hilt module for every class. Injectable classes can generally be resolved without a module when Hilt can resolve their dependencies.
+- Use scopes only when a shared lifetime is required; do not mark everything `@Singleton` by
+  default.
+- Prefer constructor injection over service-locator patterns or calls to a global container from
+  arbitrary classes.
+- Do not create a Hilt module for every class. Injectable classes can generally be resolved without
+  a module when Hilt can resolve their dependencies.
 - Keep DI modules under `core/di/` unless a binding is specific enough to belong inside a feature.
 
-The Image Optimizer ViewModel should receive its processor or use case through its constructor. It should not construct the processor itself or retain an Activity or View reference. Use the application context only where an application-scoped Android dependency is appropriate; use Activity context only for operations that genuinely require it.
+The Image Optimizer ViewModel should receive its processor or use case through its constructor. It
+should not construct the processor itself or retain an Activity or View reference. Use the
+application context only where an application-scoped Android dependency is appropriate; use Activity
+context only for operations that genuinely require it.
 
 ---
 
@@ -204,13 +241,15 @@ The Image Optimizer ViewModel should receive its processor or use case through i
 ### 6.1 Input and selection
 
 - Select one or multiple images through Android's system Photo Picker.
-- Select a source folder through the Storage Access Framework when the user wants to process folder contents.
+- Select a source folder through the Storage Access Framework when the user wants to process folder
+  contents.
 - Display available metadata such as filename, dimensions, format, and file size.
 - Allow the user to remove items from the processing queue.
 - Allow the user to choose a separate output folder.
 - Retain folder URI permission when the user grants persistable access and the provider supports it.
 - Treat picker results as `Uri` values. Do not assume a URI is a normal filesystem path.
-- Initially support common JPEG, PNG, and WebP input. Unsupported or invalid files should produce per-file errors rather than crashing the batch.
+- Initially support common JPEG, PNG, and WebP input. Unsupported or invalid files should produce
+  per-file errors rather than crashing the batch.
 
 ### 6.2 Resizing
 
@@ -226,35 +265,120 @@ The Image Optimizer ViewModel should receive its processor or use case through i
 
 ### 6.3 Output formats and compression
 
-Initial output formats:
+The Image Optimizer must distinguish pixel-preserving optimization from operations that reduce image
+information. Do not silently perform a lossy operation when the user expects lossless optimization.
+
+#### Processing modes
+
+- **Lossless Optimize (default):** automatically run applicable format-preserving lossless
+  optimizations and test compatible lossless format alternatives where image content, required
+  metadata, and rendering semantics can be preserved. Do not resize or apply lossy compression. Keep
+  the smallest valid candidate only if it is strictly smaller than the original; otherwise report no
+  savings instead of creating a redundant output.
+- **Reduce Size (explicit user choice):** allow resizing, lossy compression, and format conversion
+  according to the user's settings. Explain in the UI that resizing discards spatial detail and
+  lossy encoding can change pixels.
+- Lossless optimization should be automatic within Lossless Optimize mode; it should not require
+  users to choose an encoder or adjust a quality slider.
+- Never silently fall back from Lossless Optimize to resizing or lossy encoding. If a lossless
+  optimizer is unavailable or fails, preserve the original and report the outcome.
+
+#### Shared final lossless optimization
+
+- Apply supported format-specific lossless optimization to the final encoded output in both
+  processing modes, automatically and without a separate user-facing toggle.
+- In **Lossless Optimize**, perform applicable lossless optimization on the original representation
+  and evaluate compatible lossless alternatives. Do not resize or use lossy encoding.
+- In **Reduce Size**, complete resizing and format encoding first. Then apply applicable lossless
+  optimization to the resulting encoded file. Do not optimize the original first when it will
+  subsequently be resized or re-encoded.
+- Never apply another lossy encoding pass solely to reduce the size of an already lossy-encoded
+  result.
+- Validate the post-optimized candidate and compare its actual size with the pre-optimized output.
+  Use it only when valid and strictly smaller; otherwise retain the pre-optimized output.
+- Preserve the decoded image content during lossless post-optimization. Continue to follow the
+  metadata-preservation policy.
+- If an applicable optimizer is unavailable or fails, retain the valid pre-optimized output and
+  report the outcome rather than failing the entire image operation.
+
+#### What “lossless” means
+
+- For image content, lossless output must reproduce the same decoded pixel values for the input
+  image as interpreted by the app, after applying the input's orientation correctly. Dimensions,
+  transparency, and color appearance must be preserved.
+- Do not apply color quantization, grayscale conversion, transparent-margin trimming, lossy alpha
+  optimization, resizing, or lossy re-encoding in Lossless Optimize mode.
+- Preserve metadata by default. When handling orientation, either preserve the orientation metadata
+  correctly or normalize the pixels and update/remove that metadata consistently. Preserve embedded
+  color profiles and metadata required for correct rendering.
+- Metadata removal is a separate, optional setting, off by default. Explain that it removes
+  non-image information such as GPS or camera metadata and can affect downstream workflows even when
+  visible pixels do not change.
+- Cross-format lossless candidates should be evaluated automatically for supported format pairs only
+  if pixel values, transparency, orientation/color interpretation, and metadata covered by the
+  preservation policy remain correct. Accept the smallest valid candidate only when the actual
+  output is strictly smaller; otherwise discard candidates and keep the original.
+
+#### Format-specific implementation
+
+- **PNG:** use a dedicated lossless optimizer where practical, such as Oxipng or an
+  Android-compatible equivalent. Do not enable options that alter fully transparent pixel colors or
+  strip metadata automatically. Native bitmap re-encoding may be used as a measured fallback but
+  must not be assumed to reduce size.
+- **JPEG:** use a lossless JPEG bitstream optimizer such as `jpegtran`/libjpeg-turbo or an
+  Android-compatible equivalent for format-preserving optimization. Do not decode a JPEG bitmap and
+  recompress it as JPEG in Lossless Optimize mode; that introduces another lossy encoding step.
+- **WebP:** retain or test lossless re-encoding candidates only when they preserve decoded pixels
+  and required metadata. Compare actual output sizes because recompression can make a file larger.
+- If a suitable optimizer cannot be integrated reliably, keep that format unchanged in Lossless
+  Optimize mode rather than quietly using a lossy path.
+- Evaluate any native/Rust/JNI dependency for Android ABI support, maintenance, license, APK size,
+  and build complexity before selecting it. Do not assume a desktop CLI executable can be invoked
+  directly from the Android app.
+
+#### Output formats and lossy settings
+
+Initial normal output formats for Reduce Size mode:
 
 - **JPEG:** broad compatibility and lossy compression; does not support transparency.
-- **WebP lossy:** suitable for photos and other images where lossy compression is acceptable.
-- **WebP lossless:** preserves pixel data while applying lossless compression.
-- **PNG:** optional lossless output, particularly when transparency needs to be preserved.
+- **WebP lossy:** suitable for photos and images where lossy compression is acceptable.
+- **WebP lossless:** can be used for lossless alternatives where the encoded output is actually
+  smaller and all preservation requirements are met.
+- **PNG:** lossless output, useful where transparency and broad compatibility are important.
 
-For lossy formats, use quality 85 as the default, configurable from 1 to 100. Explain that quality values are encoder settings, not a universal measure of perceptual quality or file-size reduction.
+For lossy formats, use quality 85 as the default, configurable from 1 to 100. Quality is an encoder
+setting, not a universal measure of perceptual quality or file-size reduction. PNG must not appear
+to use the same lossy quality behavior as JPEG or lossy WebP.
 
-Use Android's native `Bitmap`, `BitmapFactory`, and bitmap compression APIs. At `minSdk` 30, use explicit `Bitmap.CompressFormat.WEBP_LOSSY` and `WEBP_LOSSLESS` when appropriate. Do not use WebM for still images; WebM is primarily a video container.
+At `minSdk` 30, use explicit `Bitmap.CompressFormat.WEBP_LOSSY` and `WEBP_LOSSLESS` where
+appropriate. These bitmap APIs do not replace the need for format-specific lossless JPEG and PNG
+optimization. Do not use WebM for still images; WebM is primarily a video container.
 
-JPEG cannot represent alpha transparency. When converting transparent input to JPEG, composite it onto a configurable background, white by default. Do not silently discard transparency without a defined policy.
+JPEG cannot represent alpha transparency. When converting transparent input to JPEG in Reduce Size
+mode, composite it onto a configurable background, white by default. Do not silently discard
+transparency without a defined policy.
 
-PNG output does not use the lossy quality setting in the same way JPEG and lossy WebP do. The UI should avoid implying that the quality slider controls PNG compression equivalently.
+Lossless mode must not resize images. Reduce Size mode may offer the maximum-dimension presets of
+1280, 1920, 2560, and 3840 pixels, plus custom input. Preserve aspect ratio and do not upscale by
+default.
 
 ### 6.4 Batch processing
 
 - Process files sequentially in the initial release to keep memory use predictable.
 - Show total progress, completed count, current filename, and any failures.
-- Allow cancellation between files; do not promise an in-progress native operation can always be stopped instantly.
+- Allow cancellation between files; do not promise an in-progress native operation can always be
+  stopped instantly.
 - Continue processing later files after an individual file fails.
 - Record success or failure for each input.
 - Release bitmap references and associated resources after processing each file.
 - Perform decoding, resizing, compression, and file I/O off the main thread.
-- Prevent accidental concurrent launches of the same batch unless concurrency is deliberately implemented.
+- Prevent accidental concurrent launches of the same batch unless concurrency is deliberately
+  implemented.
 
 ### 6.5 Results and size calculations
 
 For each successfully processed image, report:
+
 - Original dimensions and file size.
 - Output dimensions, format, and file size.
 - Size difference in bytes.
@@ -262,12 +386,14 @@ For each successfully processed image, report:
 - A way to open, share, or locate the output file through Android-supported interfaces.
 
 For the batch, report:
+
 - Total successful and failed files.
 - Original bytes represented by successfully processed files.
 - Total output bytes for those files.
 - Net bytes saved and percentage reduction.
 
-Calculate results from actual written output sizes, not estimates. Clearly handle cases where an output file is larger than its input. Do not count failed files as successful savings.
+Calculate results from actual written output sizes, not estimates. Clearly handle cases where an
+output file is larger than its input. Do not count failed files as successful savings.
 
 ---
 
@@ -275,7 +401,8 @@ Calculate results from actual written output sizes, not estimates. Clearly handl
 
 ### 7.1 Storage access model
 
-Use the **Storage Access Framework (SAF)** for user-selected directory access and AndroidX `DocumentFile` for document-tree operations where appropriate.
+Use the **Storage Access Framework (SAF)** for user-selected directory access and AndroidX
+`DocumentFile` for document-tree operations where appropriate.
 
 - Let the user select the folder to access.
 - Request persistable URI permission when supported and appropriate.
@@ -283,11 +410,13 @@ Use the **Storage Access Framework (SAF)** for user-selected directory access an
 - Use `ContentResolver` streams to read and write content.
 - Do not assume documents have directly accessible filesystem paths.
 - Do not request `MANAGE_EXTERNAL_STORAGE` for the initial app.
-- Do not assume unrestricted access to arbitrary internal storage, other apps' private directories, or every folder on an external storage volume.
+- Do not assume unrestricted access to arbitrary internal storage, other apps' private directories,
+  or every folder on an external storage volume.
 
 ### 7.2 Required operations
 
 Within an authorized folder, support the operations permitted by the underlying provider:
+
 - List files and subdirectories.
 - Read supported files and inspect metadata.
 - Create output files.
@@ -297,78 +426,113 @@ Within an authorized folder, support the operations permitted by the underlying 
 - Write transformed image content.
 - Display operation status and useful errors when an operation is denied or unsupported.
 
-Provider capabilities vary. Check operation results and handle failures instead of assuming that all providers support creation, rename, deletion, or replacement.
+Provider capabilities vary. Check operation results and handle failures instead of assuming that all
+providers support creation, rename, deletion, or replacement.
 
 ### 7.3 Output location and filenames
 
-- Default to an `Optimized` subfolder under the selected source folder when it can be created and written to.
+- Default to an `Optimized` subfolder under the selected source folder when it can be created and
+  written to.
 - Allow the user to select a different output directory.
 - Use a predictable output naming convention, such as `photo_optimized.webp`.
-- Resolve duplicate filenames by generating a non-conflicting name or asking the user; do not silently overwrite existing files.
-- Preserve originals by default. Let the user choose whether originals should be retained; any deletion after processing must be explicit and must occur only after the output has been written and validated successfully.
+- Resolve duplicate filenames by generating a non-conflicting name or asking the user; do not
+  silently overwrite existing files.
+- Preserve originals by default. Let the user choose whether originals should be retained; any
+  deletion after processing must be explicit and must occur only after the output has been written
+  and validated successfully.
 - If output creation fails, explain the issue and allow a different location to be selected.
 
 ### 7.4 Safe replacement and deletion
 
-- Ask for confirmation before deleting files. For batch processing, an optional “delete originals after successful processing” choice may be offered, but it must default to off and apply only to files whose outputs were successfully written and validated.
-- Prefer creating a new output file and validating a successful write before any replacement workflow.
-- Only replace or delete an original after an explicit user action and when the provider supports the operation.
-- Where supported, avoid leaving partially written output files. Use temporary output plus validation before exposing a final result when practical.
+- Ask for confirmation before deleting files. For batch processing, an optional “delete originals
+  after successful processing” choice may be offered, but it must default to off and apply only to
+  files whose outputs were successfully written and validated.
+- Prefer creating a new output file and validating a successful write before any replacement
+  workflow.
+- Only replace or delete an original after an explicit user action and when the provider supports
+  the operation.
+- Where supported, avoid leaving partially written output files. Use temporary output plus
+  validation before exposing a final result when practical.
 - If a replacement fails, preserve the original wherever possible and clearly report the result.
 
 ---
 
 ## 8. State Management, Lifecycle, and Background Work
 
-Use unidirectional data flow: **state flows down to composables; events flow up to the state holder**. Compose renders the current state rather than requiring imperative UI updates.
+Use unidirectional data flow: **state flows down to composables; events flow up to the state
+holder**. Compose renders the current state rather than requiring imperative UI updates.
 
 ### 8.1 State ownership
 
-- Use a feature ViewModel for screen-level state that is shared by multiple UI components or involves business logic.
-- Expose screen state as an immutable UI-state model through `StateFlow`; keep the mutable `MutableStateFlow` private to the ViewModel.
-- Collect ViewModel state from Compose with lifecycle-aware APIs such as `collectAsStateWithLifecycle()`.
-- Keep reusable composables stateless where practical: pass values as parameters and user interactions as callbacks.
-- Keep state as low in the UI tree as practical, and hoist it when multiple components need to read or modify it.
+- Use a feature ViewModel for screen-level state that is shared by multiple UI components or
+  involves business logic.
+- Expose screen state as an immutable UI-state model through `StateFlow`; keep the mutable
+  `MutableStateFlow` private to the ViewModel.
+- Collect ViewModel state from Compose with lifecycle-aware APIs such as
+  `collectAsStateWithLifecycle()`.
+- Keep reusable composables stateless where practical: pass values as parameters and user
+  interactions as callbacks.
+- Keep state as low in the UI tree as practical, and hoist it when multiple components need to read
+  or modify it.
 
 ### 8.2 Compose-local and restorable state
 
-- Use `remember` for transient UI state that only needs to survive recomposition while the composable remains in the composition.
-- Use `rememberSaveable` for small, saveable UI values that should survive configuration changes and system-initiated recreation, such as a temporary search query or selected tab.
-- Use `SavedStateHandle` for suitable ViewModel state that must be restored after system-initiated process recreation. Store small values and references, not bitmaps or large object graphs.
-- Do not treat ViewModel memory or saved instance state as durable persistence. Use DataStore or another appropriate persistent store for values that must survive app restarts.
+- Use `remember` for transient UI state that only needs to survive recomposition while the
+  composable remains in the composition.
+- Use `rememberSaveable` for small, saveable UI values that should survive configuration changes and
+  system-initiated recreation, such as a temporary search query or selected tab.
+- Use `SavedStateHandle` for suitable ViewModel state that must be restored after system-initiated
+  process recreation. Store small values and references, not bitmaps or large object graphs.
+- Do not treat ViewModel memory or saved instance state as durable persistence. Use DataStore or
+  another appropriate persistent store for values that must survive app restarts.
 
 ### 8.3 UI state and one-off effects
 
-- Keep UI state lightweight: store content URIs, processing options, metadata, progress, and result summaries rather than retaining decoded bitmaps.
-- Represent stable screen conditions in the UI state, including idle, processing, completed, cancelled, and error states where useful.
-- Avoid unreset Boolean flags for one-time events. Handle transient effects such as navigation, Snackbar messages, or launching a system UI deliberately, without losing important state when the screen is recreated.
-- Use `derivedStateOf`, `snapshotFlow`, `LaunchedEffect`, and `DisposableEffect` only where their semantics fit; they are not substitutes for ViewModel state or business logic.
+- Keep UI state lightweight: store content URIs, processing options, metadata, progress, and result
+  summaries rather than retaining decoded bitmaps.
+- Represent stable screen conditions in the UI state, including idle, processing, completed,
+  cancelled, and error states where useful.
+- Avoid unreset Boolean flags for one-time events. Handle transient effects such as navigation,
+  Snackbar messages, or launching a system UI deliberately, without losing important state when the
+  screen is recreated.
+- Use `derivedStateOf`, `snapshotFlow`, `LaunchedEffect`, and `DisposableEffect` only where their
+  semantics fit; they are not substitutes for ViewModel state or business logic.
 
 ### 8.4 Coroutines and processing lifecycle
 
-- Use Kotlin coroutines and appropriate background dispatchers for decoding, resizing, compression, and file I/O.
+- Use Kotlin coroutines and appropriate background dispatchers for decoding, resizing, compression,
+  and file I/O.
 - Keep CPU-heavy work and blocking I/O off the main thread.
 - Define cancellation behavior for the current image and remaining queue.
 - Prevent duplicate processing launches unless parallel execution is intentionally implemented.
-- `viewModelScope` is suitable for foreground processing coordinated by a screen. Consider WorkManager only if future requirements demand work to remain scheduled or reliable when the app leaves the foreground or the process is terminated.
-- Persist user preferences, such as default format, quality, maximum dimension, and background color, using Preferences DataStore when implemented.
-- Persist authorized directory URIs when possible, and handle permissions that have been revoked or become invalid.
+- `viewModelScope` is suitable for foreground processing coordinated by a screen. Consider
+  WorkManager only if future requirements demand work to remain scheduled or reliable when the app
+  leaves the foreground or the process is terminated.
+- Persist user preferences, such as default format, quality, maximum dimension, and background
+  color, using Preferences DataStore when implemented.
+- Persist authorized directory URIs when possible, and handle permissions that have been revoked or
+  become invalid.
 - History storage is optional and is not required for the first release.
 
 ---
 
 ## 9. UI and UX Requirements
 
-Use Material 3 components and a consistent theme. Use Compose Navigation destinations hosted by the single `MainActivity`.
+Use Material 3 components and a consistent theme. Use Compose Navigation destinations hosted by the
+single `MainActivity`.
 
 ### Home
+
 - Present available utilities as a simple list or grid of cards.
 - The Image Optimizer is the first available tool.
-- Do not add placeholder tools that have no implemented behavior unless clearly marked as future ideas.
+- Do not add placeholder tools that have no implemented behavior unless clearly marked as future
+  ideas.
 
 ### Image Optimizer
+
 - Clear actions for selecting images, selecting a folder, choosing output, and starting processing.
-- Settings for maximum dimension, output format, lossy quality, and JPEG background color when applicable.
+- Settings for maximum dimension, output format, lossy quality, and JPEG background color when
+  applicable.
 - Display queued images and relevant metadata.
 - Disable or guard invalid actions while processing is active.
 - Display progress and per-file status.
@@ -376,16 +540,19 @@ Use Material 3 components and a consistent theme. Use Compose Navigation destina
 - Keep original files safe by default.
 
 ### Files
+
 - Display the current authorized directory and its contents.
 - Distinguish files from folders.
 - Offer only operations available for the selected item/provider.
 - Confirm destructive operations and make errors visible.
 
 ### Settings
+
 - Persist defaults where useful.
 - Do not introduce settings that have no effect on application behavior.
 
 ### General UX
+
 - Support different screen sizes and system font scaling.
 - Handle empty states, loading states, errors, and permission-denied states.
 - Avoid blocking the main thread.
@@ -398,17 +565,20 @@ Use Material 3 components and a consistent theme. Use Compose Navigation destina
 - Perform all image processing locally.
 - No account, backend, network access, or telemetry is required for core features.
 - Use the Photo Picker and SAF wherever possible to minimize permissions.
-- Do not request broad storage permissions unless a later, specific feature demonstrably requires them.
+- Do not request broad storage permissions unless a later, specific feature demonstrably requires
+  them.
 - Explain which folder the user selected and what operations the app intends to perform there.
 - Do not upload, share, or transmit images without an explicit user action.
 - Handle permission revocation and missing URI access gracefully.
-- Because the app is for personal use, prioritize a convenient local workflow; do not add account, analytics, or public-distribution infrastructure without a separate requirement.
+- Because the app is for personal use, prioritize a convenient local workflow; do not add account,
+  analytics, or public-distribution infrastructure without a separate requirement.
 
 ---
 
 ## 11. Error Handling and Reliability
 
 The app must account for:
+
 - Invalid, corrupted, or unsupported image input.
 - Unsupported MIME types or missing metadata.
 - Failure to decode an image.
@@ -422,13 +592,17 @@ The app must account for:
 - Cancellation during a batch.
 - Partial batch success.
 
-A failure on one file should not crash the app or necessarily stop the rest of a batch. Preserve originals by default, surface actionable error messages, and accurately distinguish successful, failed, and cancelled work. Avoid catching broad exceptions without recording or surfacing the failure appropriately.
+A failure on one file should not crash the app or necessarily stop the rest of a batch. Preserve
+originals by default, surface actionable error messages, and accurately distinguish successful,
+failed, and cancelled work. Avoid catching broad exceptions without recording or surfacing the
+failure appropriately.
 
 ---
 
 ## 12. Testing Strategy
 
 ### Unit tests
+
 - Maximum-dimension calculations and aspect-ratio preservation.
 - No-upscaling behavior.
 - Output naming and duplicate-name policy.
@@ -438,6 +612,7 @@ A failure on one file should not crash the app or necessarily stop the rest of a
 - Use fake or test implementations for processor/storage interfaces where those abstractions exist.
 
 ### Instrumentation / device tests
+
 - Photo Picker selection.
 - Folder selection and URI permission retention.
 - Reading and writing through `ContentResolver` and SAF.
@@ -448,6 +623,7 @@ A failure on one file should not crash the app or necessarily stop the rest of a
 - Revoked permission and unwritable-folder behavior.
 
 ### Manual acceptance checks
+
 - Install and run on the intended API 36 phone.
 - Process a single image and a multi-image batch.
 - Confirm originals remain unchanged.
@@ -459,15 +635,25 @@ A failure on one file should not crash the app or necessarily stop the rest of a
 
 ## 13. Implementation Milestones
 
-1. **Project foundation:** Create the Android Studio project, configure Gradle, Kotlin, Compose Material 3, Hilt, SDK levels, Git, and Navigation Compose.
-2. **Application shell:** Implement the `TheShrimpApp` Application class, `MainActivity`, Home destination, and Image Optimizer destination.
-3. **State and DI:** Add ViewModels, immutable UI-state models, `StateFlow`, lifecycle-aware Compose collection, Hilt injection, and clear dependency boundaries.
-4. **Input and folder access:** Integrate Photo Picker and SAF folder selection; retain URI permissions and display file metadata.
-5. **Single-image processing:** Implement efficient decoding, orientation handling, resizing, compression, and output saving.
-6. **Batch processing:** Add a queue, sequential execution, progress, cancellation, per-file failures, and results summary.
-7. **File management:** Add directory creation, listing, rename, delete, duplicate handling, and safe output behavior.
-8. **Preferences and polish:** Persist defaults, refine Material 3 screens, and improve empty/error states and accessibility.
-9. **Testing and local release:** Run unit and device tests, check memory and storage failure modes, and generate a locally installable APK. Public Play Store distribution is outside the initial scope.
+1. **Project foundation:** Create the Android Studio project, configure Gradle, Kotlin, Compose
+   Material 3, Hilt, SDK levels, Git, and Navigation Compose.
+2. **Application shell:** Implement the `TheShrimpApp` Application class, `MainActivity`, Home
+   destination, and Image Optimizer destination.
+3. **State and DI:** Add ViewModels, immutable UI-state models, `StateFlow`, lifecycle-aware Compose
+   collection, Hilt injection, and clear dependency boundaries.
+4. **Input and folder access:** Integrate Photo Picker and SAF folder selection; retain URI
+   permissions and display file metadata.
+5. **Single-image processing:** Implement efficient decoding, orientation handling, resizing,
+   compression, and output saving.
+6. **Batch processing:** Add a queue, sequential execution, progress, cancellation, per-file
+   failures, and results summary.
+7. **File management:** Add directory creation, listing, rename, delete, duplicate handling, and
+   safe output behavior.
+8. **Preferences and polish:** Persist defaults, refine Material 3 screens, and improve empty/error
+   states and accessibility.
+9. **Testing and local release:** Run unit and device tests, check memory and storage failure modes,
+   and generate a locally installable APK. Public Play Store distribution is outside the initial
+   scope.
 
 ---
 
@@ -486,7 +672,8 @@ The first usable release is complete when it can:
 - Preserve transparency when using a compatible output format.
 - Save outputs to a user-authorized writable location.
 - Report actual output sizes, total savings, and per-file failures.
-- Create directories, rename files, and delete selected files when permitted by the selected provider.
+- Create directories, rename files, and delete selected files when permitted by the selected
+  provider.
 - Preserve originals by default.
 - Handle unsupported images, storage failures, cancellation, and permission loss without crashing.
 - Perform core functionality offline.
@@ -497,12 +684,14 @@ The first usable release is complete when it can:
 ## 15. Future Considerations
 
 Only consider these when the initial application is reliable:
+
 - Processing history and the ability to reopen output locations.
 - Additional file conversion utilities.
 - Android share-target integration for incoming images.
 - Optional background processing with WorkManager.
 - Additional processing formats or metadata-preservation controls.
 - Separate Gradle feature modules if project size or dependency boundaries justify modularization.
-- Separate saved-state or persistence infrastructure if future features require more state to survive process recreation or app restarts.
+- Separate saved-state or persistence infrastructure if future features require more state to
+  survive process recreation or app restarts.
 
 These are not requirements for the first release.

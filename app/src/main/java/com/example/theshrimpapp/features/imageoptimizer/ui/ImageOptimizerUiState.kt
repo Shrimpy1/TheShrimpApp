@@ -1,6 +1,9 @@
 package com.example.theshrimpapp.features.imageoptimizer.ui
 
 import android.net.Uri
+import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 
 data class ImageItem(
     val uri: Uri,
@@ -14,9 +17,15 @@ data class ImageOptimizerUiState(
     val selectedImagesCount: Int = 0,
     val selectedFolderUri: Uri? = null,
     val selectedFolderName: String? = null,
+    val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
     val maxDimension: Int = 1920,
-    val outputFormat: String = "WEBP_LOSSY",
+    val maxDimensionInput: String = "1920",
+    val outputFormat: OutputFormat = OutputFormat.WEBP_LOSSY,
     val quality: Int = 85,
+    val qualityInput: String = "85",
+    val jpegBackgroundColor: JpegBackgroundColor = JpegBackgroundColor.WHITE,
+    val preserveMetadata: Boolean = true,
+    val optionsError: String? = null,
     val isProcessing: Boolean = false,
     val isLoading: Boolean = false,
     val statusMessage: String = "Ready to select images or folder"

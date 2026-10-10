@@ -19,9 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -31,6 +33,7 @@ import com.example.theshrimpapp.core.ui.ShrimpTopAppBar
 import com.example.theshrimpapp.features.files.ui.FilesScreen
 import com.example.theshrimpapp.features.home.ui.HomeScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerScreen
+import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerViewModel
 import com.example.theshrimpapp.features.imageoptimizer.ui.OutputSelectionScreen
 import kotlinx.coroutines.launch
 
@@ -45,8 +48,8 @@ fun ShrimpNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val currentDestination = ShrimpTopLevelDestination.ALL.find { it.route == currentRoute }
-        ?: ShrimpTopLevelDestination.Home
+    val currentDestination = ShrimpTopLevelDestination.fromRoute(currentRoute)
+    val title = currentDestination.title
 
     val onNavigateToDestination: (ShrimpTopLevelDestination) -> Unit = { destination ->
         scope.launch { drawerState.close() }
@@ -95,7 +98,7 @@ fun ShrimpNavHost(
         Scaffold(
             topBar = {
                 ShrimpTopAppBar(
-                    title = currentDestination.title,
+                    title = title,
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(
@@ -126,16 +129,21 @@ fun ShrimpNavHost(
                 composable(ShrimpTopLevelDestination.ImageOptimizer.route) {
                     ImageOptimizerScreen(
                         onNavigateToOutput = {
-                            navController.navigate("image_optimizer_output")
+                            navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.OUTPUT_ROUTE)
                         }
                     )
                 }
 
-                composable("image_optimizer_output") {
+                composable(ShrimpTopLevelDestination.ImageOptimizer.OUTPUT_ROUTE) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
+                        navController.getBackStackEntry(ShrimpTopLevelDestination.ImageOptimizer.route)
+                    }
+                    val viewModel: ImageOptimizerViewModel = hiltViewModel(parentEntry)
                     OutputSelectionScreen(
                         onBackClick = {
                             navController.popBackStack()
-                        }
+                        },
+                        viewModel = viewModel
                     )
                 }
 
