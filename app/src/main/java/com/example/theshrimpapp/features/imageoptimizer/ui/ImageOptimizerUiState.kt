@@ -12,9 +12,12 @@ data class ImageItem(
 data class ImageOptimizerUiState(
     val selectedImages: List<ImageItem> = emptyList(),
     val selectedImagesCount: Int = 0,
+    val selectedFolderUri: Uri? = null,
+    val selectedFolderName: String? = null,
     val maxDimension: Int = 1920,
     val outputFormat: String = "WEBP_LOSSY",
     val quality: Int = 85,
     val isProcessing: Boolean = false,
-    val statusMessage: String = "Ready to select images"
+    val isLoading: Boolean = false,
+    val statusMessage: String = "Ready to select images or folder"
 )

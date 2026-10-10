@@ -210,15 +210,15 @@ rather than selecting every file individually.
 
 Tasks:
 
-- [ ] Integrate `ACTION_OPEN_DOCUMENT_TREE` / the corresponding SAF directory picker flow.
-- [ ] Take persistable URI permissions when offered and appropriate.
-- [ ] Retain the authorized tree URI and handle missing or revoked permission later.
-- [ ] Use `DocumentFile` to list folder contents.
-- [ ] Identify supported JPEG, PNG, and WebP inputs using available MIME type/metadata and a safe
+- [x] Integrate `ACTION_OPEN_DOCUMENT_TREE` / the corresponding SAF directory picker flow.
+- [x] Take persistable URI permissions when offered and appropriate.
+- [x] Retain the authorized tree URI and handle missing or revoked permission later.
+- [x] Use `DocumentFile` to list folder contents.
+- [x] Identify supported JPEG, PNG, and WebP inputs using available MIME type/metadata and a safe
   fallback where necessary.
-- [ ] Initially define folder processing as direct children only; treat recursive subfolder
+- [x] Initially define folder processing as direct children only; treat recursive subfolder
   processing as a later decision unless explicitly required.
-- [ ] Display available filename, MIME type, size, and dimensions; handle unknown metadata.
+- [x] Display available filename, MIME type, size, and dimensions; handle unknown metadata.
 
 Acceptance criteria:
 
@@ -541,7 +541,7 @@ unless a dependency clearly allows parallel work.
 2. [ ] **Shell:** US-001 — Home and navigation destinations.
 3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
 4. [x] **Input:** US-003 — Photo Picker and queue.
-5. [ ] **Folder authorization:** US-004 — SAF tree selection and metadata.
+5. [x] **Folder authorization:** US-004 — SAF tree selection and metadata.
 6. [ ] **Options model/UI:** US-005 — dimensions, format, quality, transparency behavior.
 7. [ ] **Processor:** US-006 — first get one image correctly processed.
 8. [ ] **Output:** US-007 — choose destination and safely write one output.

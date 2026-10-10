@@ -31,6 +31,7 @@ import com.example.theshrimpapp.core.ui.ShrimpTopAppBar
 import com.example.theshrimpapp.features.files.ui.FilesScreen
 import com.example.theshrimpapp.features.home.ui.HomeScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerScreen
+import com.example.theshrimpapp.features.imageoptimizer.ui.OutputSelectionScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -123,7 +124,19 @@ fun ShrimpNavHost(
                 }
 
                 composable(ShrimpTopLevelDestination.ImageOptimizer.route) {
-                    ImageOptimizerScreen()
+                    ImageOptimizerScreen(
+                        onNavigateToOutput = {
+                            navController.navigate("image_optimizer_output")
+                        }
+                    )
+                }
+
+                composable("image_optimizer_output") {
+                    OutputSelectionScreen(
+                        onBackClick = {
+                            navController.popBackStack()
+                        }
+                    )
                 }
 
                 composable(ShrimpTopLevelDestination.Files.route) {
