@@ -187,13 +187,13 @@ choose exactly what to optimize.
 
 Tasks:
 
-- [ ] Integrate Android's Photo Picker using the Activity Result APIs.
-- [ ] Accept multiple image `Uri` values.
-- [ ] Represent queued inputs as lightweight models; do not keep decoded full-size bitmaps in UI
+- [x] Integrate Android's Photo Picker using the Activity Result APIs.
+- [x] Accept multiple image `Uri` values.
+- [x] Represent queued inputs as lightweight models; do not keep decoded full-size bitmaps in UI
   state.
-- [ ] Display selected count and allow removing an item from the queue.
-- [ ] Handle an empty picker result and repeated selection without duplicating items unexpectedly.
-- [ ] Read content through `ContentResolver`; never infer a real filesystem path from a `Uri`.
+- [x] Display selected count and allow removing an item from the queue.
+- [x] Handle an empty picker result and repeated selection without duplicating items unexpectedly.
+- [x] Read content through `ContentResolver`; never infer a real filesystem path from a `Uri`.
 
 Acceptance criteria:
 
@@ -540,7 +540,7 @@ unless a dependency clearly allows parallel work.
 1. [ ] **Project bootstrapping:** EN-001, EN-002, EN-003.
 2. [ ] **Shell:** US-001 — Home and navigation destinations.
 3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
-4. [ ] **Input:** US-003 — Photo Picker and queue.
+4. [x] **Input:** US-003 — Photo Picker and queue.
 5. [ ] **Folder authorization:** US-004 — SAF tree selection and metadata.
 6. [ ] **Options model/UI:** US-005 — dimensions, format, quality, transparency behavior.
 7. [ ] **Processor:** US-006 — first get one image correctly processed.
