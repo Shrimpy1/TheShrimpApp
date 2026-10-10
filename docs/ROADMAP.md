@@ -306,24 +306,24 @@ smaller size over perfect pixel preservation.
 
 Tasks:
 
-- [ ] Create the `ImageProcessor` for the Reduce Size pipeline, independent of Compose and screen
+- [x] Create the `ImageProcessor` for the Reduce Size pipeline, independent of Compose and screen
   classes.
-- [ ] Inspect bounds before decoding a full bitmap and use sampled decoding for large inputs where
+- [x] Inspect bounds before decoding a full bitmap and use sampled decoding for large inputs where
   appropriate.
-- [ ] Read EXIF orientation and ensure output orientation is visually correct.
-- [ ] Calculate scale from the longest side, preserve aspect ratio, and never upscale by default.
-- [ ] Implement JPEG, WebP lossy, WebP lossless, and PNG output using Android bitmap APIs where
+- [x] Read EXIF orientation and ensure output orientation is visually correct.
+- [x] Calculate scale from the longest side, preserve aspect ratio, and never upscale by default.
+- [x] Implement JPEG, WebP lossy, WebP lossless, and PNG output using Android bitmap APIs where
   appropriate.
-- [ ] Composite transparent input onto the configured background when outputting JPEG.
-- [ ] Make bitmap lifecycle and memory use explicit; don't retain full-resolution bitmaps beyond
+- [x] Composite transparent input onto the configured background when outputting JPEG.
+- [x] Make bitmap lifecycle and memory use explicit; don't retain full-resolution bitmaps beyond
   processing.
-- [ ] Return structured success/failure information and actual output metadata; don't crash the
+- [x] Return structured success/failure information and actual output metadata; don't crash the
   batch for one bad file.
-- [ ] After producing the final encoded candidate, run applicable format-specific lossless
+- [x] After producing the final encoded candidate, run applicable format-specific lossless
   post-optimization when supported.
-- [ ] Compare the post-optimized candidate with the pre-optimized output and use it only if valid
+- [x] Compare the post-optimized candidate with the pre-optimized output and use it only if valid
   and strictly smaller.
-- [ ] If post-optimization fails, retain the valid pre-optimized output; do not fail an otherwise
+- [x] If post-optimization fails, retain the valid pre-optimized output; do not fail an otherwise
   successful image operation.
 
 Acceptance criteria:
@@ -608,16 +608,16 @@ Acceptance criteria:
 Use this as the practical step-by-step sequence. Finish the indicated stories before moving forward
 unless a dependency clearly allows parallel work.
 
-1. [ ] **Project bootstrapping:** EN-001, EN-002, EN-003.
-2. [ ] **Shell:** US-001 — Home and navigation destinations.
-3. [ ] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
-4. [ ] **Input:** US-003 — Photo Picker and queue.
-5. [ ] **Folder authorization:** US-004 — SAF tree selection and metadata.
-6. [ ] **Processing options:** US-005 — default Lossless Optimize mode and explicit Reduce Size
+1. [x] **Project bootstrapping:** EN-001, EN-002, EN-003.
+2. [x] **Shell:** US-001 — Home and navigation destinations.
+3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
+4. [x] **Input:** US-003 — Photo Picker and queue.
+5. [x] **Folder authorization:** US-004 — SAF tree selection and metadata.
+6. [x] **Processing options:** US-005 — default Lossless Optimize mode and explicit Reduce Size
    mode.
-7. [ ] **Lossless processing:** US-006 — integrate/test format-specific optimizers and keep only
+7. [x] **Lossless processing:** US-006 — integrate/test format-specific optimizers and keep only
    smaller valid candidates.
-8. [ ] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Reduce Size mode.
+8. [x] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Reduce Size mode.
 9. [ ] **Output:** US-008 — choose destination and safely write output.
 10. [ ] **Batch engine:** US-009 — sequential processing, progress, cancellation, per-file status.
 11. [ ] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.

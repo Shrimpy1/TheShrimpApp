@@ -2,7 +2,9 @@ package com.example.theshrimpapp.features.imageoptimizer.di
 
 import android.content.ContentResolver
 import android.content.Context
+import com.example.theshrimpapp.features.imageoptimizer.data.DefaultImageProcessor
 import com.example.theshrimpapp.features.imageoptimizer.data.DefaultLosslessImageOptimizer
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessor
 import com.example.theshrimpapp.features.imageoptimizer.domain.LosslessImageOptimizer
 import dagger.Binds
 import dagger.Module
@@ -21,6 +23,12 @@ abstract class ImageOptimizerModule {
     abstract fun bindLosslessImageOptimizer(
         implementation: DefaultLosslessImageOptimizer
     ): LosslessImageOptimizer
+
+    @Binds
+    @Singleton
+    abstract fun bindImageProcessor(
+        implementation: DefaultImageProcessor
+    ): ImageProcessor
 }
 
 @Module
