@@ -267,25 +267,25 @@ I can reduce file size without sacrificing image quality.
 
 Tasks:
 
-- [ ] Define a `LosslessImageOptimizer` interface separate from Compose and the ViewModel.
-- [ ] Evaluate Android-compatible format-specific implementations for PNG (for example, Oxipng or an
+- [x] Define a `LosslessImageOptimizer` interface separate from Compose and the ViewModel.
+- [x] Evaluate Android-compatible format-specific implementations for PNG (for example, Oxipng or an
   equivalent) and JPEG (for example, `jpegtran`/libjpeg-turbo or an equivalent); review license,
   maintenance, Android ABI/NDK support, APK impact, and build complexity before choosing.
-- [ ] Do not assume a desktop CLI binary can run directly on Android; integrate a supported
+- [x] Do not assume a desktop CLI binary can run directly on Android; integrate a supported
   library/binding or choose a compatible alternative.
-- [ ] Optimize PNG encoding losslessly without enabling transformations that change pixel data or
+- [x] Optimize PNG encoding losslessly without enabling transformations that change pixel data or
   strip metadata by default.
-- [ ] Optimize JPEG bitstreams without decoding/re-encoding JPEG through a bitmap in lossless mode.
-- [ ] Automatically evaluate compatible lossless format alternatives (for example, PNG to WebP
+- [x] Optimize JPEG bitstreams without decoding/re-encoding JPEG through a bitmap in lossless mode.
+- [x] Automatically evaluate compatible lossless format alternatives (for example, PNG to WebP
   lossless) when content, transparency, rendering semantics, and required metadata can be preserved;
   compare actual sizes.
-- [ ] Preserve dimensions, alpha/transparency, color interpretation, and orientation semantics.
-- [ ] Preserve metadata by default; apply metadata stripping only when the user enables the separate
+- [x] Preserve dimensions, alpha/transparency, color interpretation, and orientation semantics.
+- [x] Preserve metadata by default; apply metadata stripping only when the user enables the separate
   option.
-- [ ] Keep the original unchanged if no supported optimizer exists, an optimization fails, or the
+- [x] Keep the original unchanged if no supported optimizer exists, an optimization fails, or the
   candidate is not strictly smaller.
-- [ ] Return structured result status: optimized, unchanged/no savings, unsupported, or failed.
-- [ ] Design the lossless optimizer so its format-specific optimization capability can also be
+- [x] Return structured result status: optimized, unchanged/no savings, unsupported, or failed.
+- [x] Design the lossless optimizer so its format-specific optimization capability can also be
   invoked on the final encoded output produced by US-007, without requiring the original source to
   be optimized first.
 
