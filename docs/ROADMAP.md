@@ -4,7 +4,9 @@
 **Purpose:** Working implementation plan for personal development, not a formal SDD.  
 **Status convention:** `[ ]` not started · `[x]` done · `[-]` intentionally deferred
 
-This document turns the app specification into an ordered roadmap and actionable backlog. Keep `SPEC.md` as the source of truth for product requirements; use this file to track implementation. If scope changes, update the spec first and then adjust this backlog.
+This document turns the app specification into an ordered roadmap and actionable backlog. Keep
+`SPEC.md` as the source of truth for product requirements; use this file to track implementation. If
+scope changes, update the spec first and then adjust this backlog.
 
 ## 1. Terms used in this plan
 
@@ -13,10 +15,12 @@ This document turns the app specification into an ordered roadmap and actionable
 - **User story:** A user-facing outcome, commonly written as “As a user, I want … so that …”.
 - **Acceptance criteria (AC):** Observable conditions that determine whether a story is complete.
 - **Tasks / subtasks:** Concrete implementation work needed to deliver a story.
-- **Enabler:** Technical setup or refactoring needed to support later stories, even if it has no direct user-facing outcome.
+- **Enabler:** Technical setup or refactoring needed to support later stories, even if it has no
+  direct user-facing outcome.
 - **MVP:** The first usable local version covering the core requirements in `SPEC.md`.
 
-This is a sequential backlog, not a commitment to use Scrum sprints. Complete stories in dependency order; change the order only when it makes implementation simpler.
+This is a sequential backlog, not a commitment to use Scrum sprints. Complete stories in dependency
+order; change the order only when it makes implementation simpler.
 
 ---
 
@@ -33,7 +37,8 @@ This is a sequential backlog, not a commitment to use Scrum sprints. Complete st
 | **M6 — Preferences and UX refinement**    | Useful defaults persist; empty, error, and completion states are polished                            | M3–M5      |
 | **M7 — Verification and local release**   | Core acceptance criteria pass on the target phone and a local APK can be installed                   | M0–M6      |
 
-M4 and M5 can be worked on independently after M2/M3 foundations are ready. M6 can be done incrementally rather than held until the end.
+M4 and M5 can be worked on independently after M2/M3 foundations are ready. M6 can be done
+incrementally rather than held until the end.
 
 ---
 
@@ -41,11 +46,13 @@ M4 and M5 can be worked on independently after M2/M3 foundations are ready. M6 c
 
 A story is done when all applicable conditions are met:
 
-- [ ] Acceptance criteria are verified on the target Android phone or with a suitable automated test.
+- [ ] Acceptance criteria are verified on the target Android phone or with a suitable automated
+  test.
 - [ ] Loading, empty, failure, and permission-denied states are handled where relevant.
 - [ ] No long-running decoding, encoding, or file I/O blocks the main thread.
 - [ ] Original files remain unchanged unless the user explicitly requests a destructive operation.
-- [ ] New code follows the existing package boundaries and uses constructor injection where appropriate.
+- [ ] New code follows the existing package boundaries and uses constructor injection where
+  appropriate.
 - [ ] The app builds successfully and no known regression is introduced.
 - [ ] The checklist for the story is updated here.
 
@@ -60,14 +67,17 @@ A story is done when all applicable conditions are met:
 **Priority:** P0 · **Type:** Enabler · **Milestone:** M0
 
 Tasks:
+
 - [x] Create the Android Studio project using Kotlin and the Jetpack Compose template.
-- [x] Set `minSdk = 30`; initially use `compileSdk = 36` and `targetSdk = 36`, subject to the installed stable toolchain and template.
+- [x] Set `minSdk = 30`; initially use `compileSdk = 36` and `targetSdk = 36`, subject to the
+  installed stable toolchain and template.
 - [x] Keep the project in a single application Gradle module.
 - [x] Verify the Gradle wrapper and Kotlin DSL build files are committed.
 - [x] Keep dependency versions in the generated version catalog where available.
 - [x] Build and launch the template app on the API 36 phone.
 
 Acceptance criteria:
+
 - The project syncs and builds without errors.
 - The app installs and launches on the intended phone.
 - SDK values and module layout match `SPEC.md`.
@@ -77,13 +87,17 @@ Acceptance criteria:
 **Priority:** P0 · **Type:** Enabler · **Milestone:** M0
 
 Tasks:
-- [ ] Initialize Git from the project root (the directory containing `settings.gradle.kts`) or use Android Studio's Git integration.
-- [x] Review `.gitignore`; exclude build outputs and machine-specific files such as `local.properties`.
-- [ ] Make the initial commit.
-- [ ] Create an empty remote repository and push the initial branch, if using a remote.
-- [ ] Commit `SPEC.md` and `ROADMAP.md` as project documentation.
+
+- [x] Initialize Git from the project root (the directory containing `settings.gradle.kts`) or use
+  Android Studio's Git integration.
+- [x] Review `.gitignore`; exclude build outputs and machine-specific files such as
+  `local.properties`.
+- [x] Make the initial commit.
+- [x] Create an empty remote repository and push the initial branch, if using a remote.
+- [x] Commit `SPEC.md` and `ROADMAP.md` as project documentation.
 
 Acceptance criteria:
+
 - Source and documentation are version-controlled.
 - Local SDK paths, generated build output, and secrets are not committed.
 
@@ -92,15 +106,18 @@ Acceptance criteria:
 **Priority:** P0 · **Type:** Enabler · **Milestone:** M0–M1
 
 Tasks:
-- [ ] Confirm the Compose Material 3 setup generated by Android Studio.
-- [ ] Add Navigation Compose.
-- [ ] Configure Hilt's Gradle plugin, dependencies, and compatible Kotlin/KSP setup according to the current official setup instructions.
-- [ ] Add lifecycle-aware Compose state collection support.
+
+- [x] Confirm the Compose Material 3 setup generated by Android Studio.
+- [x] Add Navigation Compose.
+- [x] Configure Hilt's Gradle plugin, dependencies, and compatible Kotlin/KSP setup according to the
+  current official setup instructions.
+- [x] Add lifecycle-aware Compose state collection support.
 - [ ] Add AndroidX ExifInterface and DocumentFile when their features are implemented.
 - [ ] Add Preferences DataStore when persisted preferences are implemented.
-- [ ] Avoid adding libraries before a concrete use case needs them.
+- [x] Avoid adding libraries before a concrete use case needs them.
 
 Acceptance criteria:
+
 - Gradle sync succeeds after each dependency change.
 - Dependency versions are compatible with the project's Android Gradle Plugin and Kotlin setup.
 
@@ -112,9 +129,11 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M1
 
-**Story:** As a user, I want a home screen with available tools so that I can open the utility I need.
+**Story:** As a user, I want a home screen with available tools so that I can open the utility I
+need.
 
 Tasks:
+
 - [ ] Create `TheShrimpApp.kt` and annotate the Application class with `@HiltAndroidApp`.
 - [ ] Annotate `MainActivity` with `@AndroidEntryPoint`.
 - [ ] Set up the app theme using Material 3.
@@ -124,6 +143,7 @@ Tasks:
 - [ ] Keep a single Activity; destinations are Compose screens.
 
 Acceptance criteria:
+
 - App opens at Home.
 - User can open Image Optimizer and Files, then return using back navigation.
 - Navigation does not rely on a destination reaching into another destination's internal UI state.
@@ -132,19 +152,24 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M1
 
-**Story:** As a developer, I want screen state and dependencies managed consistently so that features remain maintainable and testable.
+**Story:** As a developer, I want screen state and dependencies managed consistently so that
+features remain maintainable and testable.
 
 Tasks:
+
 - [ ] Create the Image Optimizer UI-state data class.
 - [ ] Create a Hilt-enabled ViewModel using `@HiltViewModel` and constructor injection.
 - [ ] Expose immutable screen state through `StateFlow` backed by a private `MutableStateFlow`.
 - [ ] Collect state in Compose using `collectAsStateWithLifecycle()`.
-- [ ] Use events/callbacks from UI to ViewModel; don't mutate ViewModel state directly from composables.
-- [ ] Use `remember` for ephemeral component state and `rememberSaveable` for small restorable UI inputs where suitable.
+- [ ] Use events/callbacks from UI to ViewModel; don't mutate ViewModel state directly from
+  composables.
+- [ ] Use `remember` for ephemeral component state and `rememberSaveable` for small restorable UI
+  inputs where suitable.
 - [ ] Keep Android `Context`, Activity, and View references out of the ViewModel.
 - [ ] Add a Hilt provider for Android dependencies such as `ContentResolver` only where needed.
 
 Acceptance criteria:
+
 - A UI control can send an event to the ViewModel and render the updated state.
 - Hilt constructs the ViewModel and its dependencies successfully.
 - State ownership is clear; transient UI state is not unnecessarily moved into the ViewModel.
@@ -157,17 +182,21 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M2
 
-**Story:** As a user, I want to select one or more images through Android's picker so that I can choose exactly what to optimize.
+**Story:** As a user, I want to select one or more images through Android's picker so that I can
+choose exactly what to optimize.
 
 Tasks:
+
 - [ ] Integrate Android's Photo Picker using the Activity Result APIs.
 - [ ] Accept multiple image `Uri` values.
-- [ ] Represent queued inputs as lightweight models; do not keep decoded full-size bitmaps in UI state.
+- [ ] Represent queued inputs as lightweight models; do not keep decoded full-size bitmaps in UI
+  state.
 - [ ] Display selected count and allow removing an item from the queue.
 - [ ] Handle an empty picker result and repeated selection without duplicating items unexpectedly.
 - [ ] Read content through `ContentResolver`; never infer a real filesystem path from a `Uri`.
 
 Acceptance criteria:
+
 - User can select multiple images and see the resulting queue.
 - User can remove an image from the queue.
 - Canceling the picker leaves the queue in a valid state.
@@ -176,18 +205,23 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M2
 
-**Story:** As a user, I want to authorize a folder so that I can choose images from a directory rather than selecting every file individually.
+**Story:** As a user, I want to authorize a folder so that I can choose images from a directory
+rather than selecting every file individually.
 
 Tasks:
+
 - [ ] Integrate `ACTION_OPEN_DOCUMENT_TREE` / the corresponding SAF directory picker flow.
 - [ ] Take persistable URI permissions when offered and appropriate.
 - [ ] Retain the authorized tree URI and handle missing or revoked permission later.
 - [ ] Use `DocumentFile` to list folder contents.
-- [ ] Identify supported JPEG, PNG, and WebP inputs using available MIME type/metadata and a safe fallback where necessary.
-- [ ] Initially define folder processing as direct children only; treat recursive subfolder processing as a later decision unless explicitly required.
+- [ ] Identify supported JPEG, PNG, and WebP inputs using available MIME type/metadata and a safe
+  fallback where necessary.
+- [ ] Initially define folder processing as direct children only; treat recursive subfolder
+  processing as a later decision unless explicitly required.
 - [ ] Display available filename, MIME type, size, and dimensions; handle unknown metadata.
 
 Acceptance criteria:
+
 - User can authorize a folder and see its accessible contents.
 - Only supported image inputs are queued for image processing.
 - A denied or invalid folder permission results in a useful error and recovery path.
@@ -200,17 +234,22 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to configure output dimensions, format, and quality so that the output fits my needs.
+**Story:** As a user, I want to configure output dimensions, format, and quality so that the output
+fits my needs.
 
 Tasks:
-- [ ] Model `ImageProcessingOptions` with maximum dimension, output format, quality, and JPEG background color.
+
+- [ ] Model `ImageProcessingOptions` with maximum dimension, output format, quality, and JPEG
+  background color.
 - [ ] Offer maximum-dimension presets of 1280, 1920, 2560, and 3840 px, plus custom input.
 - [ ] Default lossy quality to 85; constrain accepted values to 1–100.
 - [ ] Offer JPEG, WebP lossy, WebP lossless, and PNG output.
-- [ ] Make the quality control apply only to formats for which it is meaningful; don't imply it controls PNG lossless compression in the same way.
+- [ ] Make the quality control apply only to formats for which it is meaningful; don't imply it
+  controls PNG lossless compression in the same way.
 - [ ] Validate custom values and reject invalid options before processing.
 
 Acceptance criteria:
+
 - User can change processing settings.
 - The selected options are passed to the processor as a coherent model.
 - Invalid settings cannot start a batch.
@@ -219,9 +258,11 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to resize and convert an image so that I can reduce its dimensions and file size.
+**Story:** As a user, I want to resize and convert an image so that I can reduce its dimensions and
+file size.
 
 Tasks:
+
 - [ ] Create an `ImageProcessor` independent of Compose and screen classes.
 - [ ] Inspect image bounds before decoding the full bitmap.
 - [ ] Use sampled decoding for large inputs where appropriate.
@@ -229,10 +270,13 @@ Tasks:
 - [ ] Calculate scale from the longest side, preserving aspect ratio and never upscaling by default.
 - [ ] Implement JPEG, WebP lossy, WebP lossless, and PNG output using Android bitmap APIs.
 - [ ] Composite transparent input onto the configured background when outputting JPEG.
-- [ ] Make bitmap lifecycle and memory use explicit; don't retain full-resolution bitmaps beyond processing.
-- [ ] Return structured success/failure information rather than crashing the batch for a single bad file.
+- [ ] Make bitmap lifecycle and memory use explicit; don't retain full-resolution bitmaps beyond
+  processing.
+- [ ] Return structured success/failure information rather than crashing the batch for a single bad
+  file.
 
 Acceptance criteria:
+
 - A single valid image produces output with correct dimensions and orientation.
 - Aspect ratio is preserved and no-upscaling behavior works.
 - JPEG output has a defined background when the input contains transparency.
@@ -242,18 +286,24 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M3
 
-**Story:** As a user, I want to choose an output location and save a new optimized file so that the source remains safe.
+**Story:** As a user, I want to choose an output location and save a new optimized file so that the
+source remains safe.
 
 Tasks:
-- [ ] Implement output writing through `ContentResolver` and/or authorized `DocumentFile` destinations.
+
+- [ ] Implement output writing through `ContentResolver` and/or authorized `DocumentFile`
+  destinations.
 - [ ] Support choosing an output directory using SAF.
-- [ ] Default to an `Optimized` subfolder under the source folder if creation and writes are supported.
-- [ ] Generate output names such as `photo_optimized.webp` and resolve collisions without silent overwrite.
+- [ ] Default to an `Optimized` subfolder under the source folder if creation and writes are
+  supported.
+- [ ] Generate output names such as `photo_optimized.webp` and resolve collisions without silent
+  overwrite.
 - [ ] Check stream and provider operation results; clean up incomplete outputs when possible.
 - [ ] Verify the output was written and obtain actual output size.
 - [ ] Keep the original untouched by default.
 
 Acceptance criteria:
+
 - User can save output into an authorized writable location.
 - Existing files aren't silently overwritten.
 - Failed writes are reported and the original remains intact.
@@ -266,31 +316,40 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M4
 
-**Story:** As a user, I want to process several images in one run and see progress so that I don't have to repeat the same operation manually.
+**Story:** As a user, I want to process several images in one run and see progress so that I don't
+have to repeat the same operation manually.
 
 Tasks:
+
 - [ ] Implement sequential processing of the queue.
-- [ ] Run decode, resize, compression, and file I/O off the main thread using appropriate coroutine dispatchers.
+- [ ] Run decode, resize, compression, and file I/O off the main thread using appropriate coroutine
+  dispatchers.
 - [ ] Prevent accidental duplicate concurrent launches.
-- [ ] Model batch status, completed count, current filename, per-file result, and cancellation status.
+- [ ] Model batch status, completed count, current filename, per-file result, and cancellation
+  status.
 - [ ] Update observable ViewModel state as each file finishes.
-- [ ] Allow cancellation between files and handle cancellation during an individual operation as far as practical.
+- [ ] Allow cancellation between files and handle cancellation during an individual operation as far
+  as practical.
 - [ ] Continue after per-file failures and record those failures.
 - [ ] Release references to each processed bitmap before moving to the next item.
 
 Acceptance criteria:
+
 - A batch processes multiple supported images sequentially.
 - Progress updates without freezing the UI.
-- Canceling stops future work; completed outputs remain and final state accurately reports partial completion.
+- Canceling stops future work; completed outputs remain and final state accurately reports partial
+  completion.
 - One input failure does not prevent later queued files from being attempted.
 
 ### US-009 — Show accurate processing results
 
 **Priority:** P0 · **Milestone:** M4
 
-**Story:** As a user, I want to see the actual size reduction and failures so that I can judge the result of a batch.
+**Story:** As a user, I want to see the actual size reduction and failures so that I can judge the
+result of a batch.
 
 Tasks:
+
 - [ ] Record original bytes and actual output bytes for each successful image.
 - [ ] Calculate per-image byte difference and percentage change.
 - [ ] Calculate aggregate input/output totals using only successfully processed files.
@@ -299,6 +358,7 @@ Tasks:
 - [ ] Provide an Android-supported way to open, share, or locate outputs where available.
 
 Acceptance criteria:
+
 - Reported sizes match the actual output files.
 - Larger outputs are shown as larger rather than represented as savings.
 - Failed and canceled items are clearly distinguished from successful ones.
@@ -311,16 +371,20 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M5
 
-**Story:** As a user, I want to browse an authorized directory so that I can inspect its files and subdirectories.
+**Story:** As a user, I want to browse an authorized directory so that I can inspect its files and
+subdirectories.
 
 Tasks:
+
 - [ ] Build the Files screen around the selected tree URI and `DocumentFile`.
 - [ ] Display the current directory and distinguish directories from files.
-- [ ] Provide navigation into child directories and back to parent directories within the granted tree.
+- [ ] Provide navigation into child directories and back to parent directories within the granted
+  tree.
 - [ ] Display available file metadata without assuming every provider supplies it.
 - [ ] Show a useful empty state and recover when access is revoked.
 
 Acceptance criteria:
+
 - User can browse the granted directory tree to the extent permitted by the provider.
 - Files and folders are distinguishable.
 - Invalid or revoked access does not crash the screen.
@@ -332,6 +396,7 @@ Acceptance criteria:
 **Story:** As a user, I want to create folders and rename files so that I can organize outputs.
 
 Tasks:
+
 - [ ] Add create-directory UI with name validation.
 - [ ] Create directories through `DocumentFile` where supported.
 - [ ] Add rename UI with validation and duplicate-name handling where the provider supports it.
@@ -339,6 +404,7 @@ Tasks:
 - [ ] Surface unsupported-operation and provider errors.
 
 Acceptance criteria:
+
 - Creation and rename succeed when the provider supports them.
 - Failed operations leave the displayed state accurate and provide an error message.
 
@@ -346,9 +412,11 @@ Acceptance criteria:
 
 **Priority:** P0 · **Milestone:** M5
 
-**Story:** As a user, I want to delete a selected file intentionally so that I can clean up storage without accidental data loss.
+**Story:** As a user, I want to delete a selected file intentionally so that I can clean up storage
+without accidental data loss.
 
 Tasks:
+
 - [ ] Add an explicit confirmation step before deletion.
 - [ ] Clearly identify the selected file in the confirmation UI.
 - [ ] Delete through the provider API and check the returned result.
@@ -356,6 +424,7 @@ Tasks:
 - [ ] Report unsupported or failed deletion.
 
 Acceptance criteria:
+
 - No file is deleted merely by selecting it.
 - The user must confirm the destructive action.
 - Failure is visible and the listing doesn't falsely indicate success.
@@ -368,15 +437,18 @@ Acceptance criteria:
 
 **Priority:** P1 · **Milestone:** M6
 
-**Story:** As a user, I want my preferred options remembered so that I don't need to set them every time.
+**Story:** As a user, I want my preferred options remembered so that I don't need to set them every
+time.
 
 Tasks:
+
 - [ ] Add Preferences DataStore only when the preference requirements are clear.
 - [ ] Persist output format, quality, max dimension, and JPEG background color.
 - [ ] Load defaults as observable state and handle missing or invalid values safely.
 - [ ] Keep sensitive or large image data out of preferences.
 
 Acceptance criteria:
+
 - Saved defaults persist after app restart.
 - A fresh install or missing preference uses sensible defaults.
 
@@ -384,9 +456,11 @@ Acceptance criteria:
 
 **Priority:** P1 · **Milestone:** M6
 
-**Story:** As a user, I want clear feedback for empty, loading, error, and completed states so that I understand what the app is doing.
+**Story:** As a user, I want clear feedback for empty, loading, error, and completed states so that
+I understand what the app is doing.
 
 Tasks:
+
 - [ ] Design empty states for no selected images and empty directories.
 - [ ] Provide progress, completion, and cancellation presentation.
 - [ ] Show actionable messages for permission, read, write, and processing errors.
@@ -395,6 +469,7 @@ Tasks:
 - [ ] Add accessibility labels and sensible touch targets.
 
 Acceptance criteria:
+
 - Every major user flow has a clear next action or explanation when it cannot proceed.
 - Processing and file-management errors are visible without log inspection.
 
@@ -407,6 +482,7 @@ Acceptance criteria:
 **Priority:** P0 · **Milestone:** M7
 
 Tasks:
+
 - [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules.
 - [ ] Test output naming and duplicate-name policy.
 - [ ] Test size-difference calculations when output is smaller, equal, or larger.
@@ -414,6 +490,7 @@ Tasks:
 - [ ] Test ViewModel state transitions and cancellation behavior.
 
 Acceptance criteria:
+
 - Core processing rules have repeatable tests.
 - Failed processing is returned as a result/error instead of unexpectedly crashing the app.
 
@@ -422,15 +499,18 @@ Acceptance criteria:
 **Priority:** P0 · **Milestone:** M7
 
 Tasks:
+
 - [ ] Test Photo Picker selection and cancellation.
 - [ ] Test SAF tree selection and retained permissions.
 - [ ] Test read/write, folder creation, rename, and delete with supported providers.
 - [ ] Test JPEG, PNG transparency, WebP lossy/lossless, and EXIF orientation.
 - [ ] Test large images and a multi-image batch for UI responsiveness and memory use.
-- [ ] Test revoked permission, unwritable folder, duplicate names, insufficient storage, and cancellation.
+- [ ] Test revoked permission, unwritable folder, duplicate names, insufficient storage, and
+  cancellation.
 - [ ] Confirm the originals remain unchanged throughout normal processing.
 
 Acceptance criteria:
+
 - Core scenarios pass on the intended API 36 device.
 - Storage-provider limitations and errors are handled rather than assumed away.
 
@@ -439,12 +519,14 @@ Acceptance criteria:
 **Priority:** P0 · **Milestone:** M7
 
 Tasks:
+
 - [ ] Confirm the release build configuration.
 - [ ] Build a release APK using Android Studio or Gradle.
 - [ ] Install the APK on the target phone and run the core acceptance checklist.
 - [ ] Keep signing credentials private and out of Git.
 
 Acceptance criteria:
+
 - A locally installable APK is produced and runs the core workflow.
 - No public Play Store release is required.
 
@@ -452,7 +534,8 @@ Acceptance criteria:
 
 # 5. Recommended implementation order
 
-Use this as the practical step-by-step sequence. Finish the indicated stories before moving forward unless a dependency clearly allows parallel work.
+Use this as the practical step-by-step sequence. Finish the indicated stories before moving forward
+unless a dependency clearly allows parallel work.
 
 1. [ ] **Project bootstrapping:** EN-001, EN-002, EN-003.
 2. [ ] **Shell:** US-001 — Home and navigation destinations.
@@ -468,13 +551,16 @@ Use this as the practical step-by-step sequence. Finish the indicated stories be
 12. [ ] **Preferences and polish:** US-013, US-014.
 13. [ ] **Hardening and local release:** EN-004, EN-005, EN-006.
 
-A useful early vertical slice is: **select one image → resize/convert it → save a new output → verify the resulting file**. This validates the most technically uncertain path before building the batch UI around it.
+A useful early vertical slice is: **select one image → resize/convert it → save a new output →
+verify the resulting file**. This validates the most technically uncertain path before building the
+batch UI around it.
 
 ---
 
 # 6. MVP release checklist
 
-The MVP is ready when all P0 stories needed for the core workflow are complete and the following are verified:
+The MVP is ready when all P0 stories needed for the core workflow are complete and the following are
+verified:
 
 - [ ] App builds and runs on the API 36 phone with `minSdk = 30`.
 - [ ] Home, Image Optimizer, and Files are navigable within one Activity.
