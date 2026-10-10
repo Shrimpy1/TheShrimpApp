@@ -134,13 +134,13 @@ need.
 
 Tasks:
 
-- [ ] Create `TheShrimpApp.kt` and annotate the Application class with `@HiltAndroidApp`.
-- [ ] Annotate `MainActivity` with `@AndroidEntryPoint`.
-- [ ] Set up the app theme using Material 3.
-- [ ] Create the navigation host and initial destinations: Home, Image Optimizer, and Files.
-- [ ] Add a simple Home screen with an entry for Image Optimizer and Files.
-- [ ] Verify forward navigation and system back behavior.
-- [ ] Keep a single Activity; destinations are Compose screens.
+- [x] Create `TheShrimpApp.kt` and annotate the Application class with `@HiltAndroidApp`.
+- [x] Annotate `MainActivity` with `@AndroidEntryPoint`.
+- [x] Set up the app theme using Material 3.
+- [x] Create the navigation host and initial destinations: Home, Image Optimizer, and Files.
+- [x] Add a simple Home screen with an entry for Image Optimizer and Files.
+- [x] Verify forward navigation and system back behavior.
+- [x] Keep a single Activity; destinations are Compose screens.
 
 Acceptance criteria:
 
