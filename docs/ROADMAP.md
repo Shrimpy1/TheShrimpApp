@@ -157,16 +157,16 @@ features remain maintainable and testable.
 
 Tasks:
 
-- [ ] Create the Image Optimizer UI-state data class.
-- [ ] Create a Hilt-enabled ViewModel using `@HiltViewModel` and constructor injection.
-- [ ] Expose immutable screen state through `StateFlow` backed by a private `MutableStateFlow`.
-- [ ] Collect state in Compose using `collectAsStateWithLifecycle()`.
-- [ ] Use events/callbacks from UI to ViewModel; don't mutate ViewModel state directly from
+- [x] Create the Image Optimizer UI-state data class.
+- [x] Create a Hilt-enabled ViewModel using `@HiltViewModel` and constructor injection.
+- [x] Expose immutable screen state through `StateFlow` backed by a private `MutableStateFlow`.
+- [x] Collect state in Compose using `collectAsStateWithLifecycle()`.
+- [x] Use events/callbacks from UI to ViewModel; don't mutate ViewModel state directly from
   composables.
-- [ ] Use `remember` for ephemeral component state and `rememberSaveable` for small restorable UI
+- [x] Use `remember` for ephemeral component state and `rememberSaveable` for small restorable UI
   inputs where suitable.
-- [ ] Keep Android `Context`, Activity, and View references out of the ViewModel.
-- [ ] Add a Hilt provider for Android dependencies such as `ContentResolver` only where needed.
+- [x] Keep Android `Context`, Activity, and View references out of the ViewModel.
+- [x] Add a Hilt provider for Android dependencies such as `ContentResolver` only where needed.
 
 Acceptance criteria:
 
@@ -539,7 +539,7 @@ unless a dependency clearly allows parallel work.
 
 1. [ ] **Project bootstrapping:** EN-001, EN-002, EN-003.
 2. [ ] **Shell:** US-001 — Home and navigation destinations.
-3. [ ] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
+3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
 4. [ ] **Input:** US-003 — Photo Picker and queue.
 5. [ ] **Folder authorization:** US-004 — SAF tree selection and metadata.
 6. [ ] **Options model/UI:** US-005 — dimensions, format, quality, transparency behavior.
