@@ -345,19 +345,23 @@ remains safe.
 
 Tasks:
 
-- [ ] Implement output writing through `ContentResolver` and/or authorized `DocumentFile`
+- [x] Implement output writing through `ContentResolver` and/or authorized `DocumentFile`
   destinations.
-- [ ] Support choosing an output directory using SAF.
-- [ ] Default to an `Optimized` subfolder under the source folder if creation and writes are
+- [x] Support choosing an output directory using SAF.
+- [x] Default to an `Optimized` subfolder under the source folder if creation and writes are
   supported.
-- [ ] Generate output names such as `photo_optimized.webp` and resolve collisions without silent
+- [x] Generate output names such as `photo_optimized.webp` and resolve collisions without silent
   overwrite.
-- [ ] Check stream and provider operation results; clean up incomplete outputs when possible.
-- [ ] Verify the output was written and obtain actual output size.
-- [ ] In Lossless Optimize, avoid writing a duplicate output when no smaller valid candidate is
+- [x] Check stream and provider operation results; clean up incomplete outputs when possible.
+- [x] Verify the output was written and obtain actual output size.
+- [x] In Lossless Optimize, avoid writing a duplicate output when no smaller valid candidate is
   available; report “already optimized” or “no lossless savings.”
-- [ ] Keep the original untouched by default; any original deletion must be an explicit later action
+- [x] Keep the original untouched by default; any original deletion must be an explicit later action
   after output validation.
+
+Verification: JVM naming tests and build/lint checks are automated. SAF instrumentation tests cover
+collision handling, default subfolder creation, unchanged results, write failure, and corrupt output.
+Device execution and picker acceptance checks remain pending (no connected Android device).
 
 Acceptance criteria:
 

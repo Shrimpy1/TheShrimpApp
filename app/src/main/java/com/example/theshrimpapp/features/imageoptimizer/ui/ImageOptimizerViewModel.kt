@@ -21,16 +21,65 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.theshrimpapp.features.imageoptimizer.data.ImageOutputSaver
+import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
+import kotlinx.coroutines.CancellationException
 
 @HiltViewModel
 class ImageOptimizerViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val outputSaver: ImageOutputSaver
 ) : ViewModel() {
 
     private val contentResolver: ContentResolver get() = context.contentResolver
 
     private val _uiState = MutableStateFlow(ImageOptimizerUiState())
     val uiState: StateFlow<ImageOptimizerUiState> = _uiState.asStateFlow()
+
+    fun selectOutputFolder(uri: Uri) {
+        if (_uiState.value.isProcessing || _uiState.value.isLoading) return
+        _uiState.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            try {
+                val folder = outputSaver.selectFolder(uri)
+                _uiState.update { it.copy(outputFolderUri = folder.uri, outputFolderName = folder.name,
+                    statusMessage = "Output folder: ${folder.name}") }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(statusMessage = e.localizedMessage ?: "Cannot access output folder") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    fun useDefaultOutputFolder() {
+        if (!_uiState.value.isProcessing) {
+            _uiState.update { it.copy(outputFolderUri = null, outputFolderName = null) }
+        }
+    }
+
+    fun saveImage(uri: Uri) {
+        val state = _uiState.value
+        if (state.isProcessing || state.isLoading || state.optionsError != null) return
+        val item = state.selectedImages.find { it.uri == uri } ?: return
+        val options = getProcessingOptions() ?: return
+        _uiState.update { it.copy(isProcessing = true, statusMessage = "Processing ${item.name ?: "image"}...") }
+        viewModelScope.launch {
+            try {
+                val result = outputSaver.save(uri, item.name, state.outputFolderUri,
+                    state.selectedFolderUri, options)
+                _uiState.update { it.copy(statusMessage = when (result) {
+                    is SaveImageResult.Saved -> "Saved ${result.name} (${result.details.outputSizeBytes} bytes). Originals kept."
+                    is SaveImageResult.Unchanged -> "No lossless savings: ${result.reason}"
+                    is SaveImageResult.Failed -> "Save failed: ${result.error}"
+                }) }
+            } finally {
+                _uiState.update { it.copy(isProcessing = false) }
+            }
+        }
+    }
 
     fun selectFolder(uri: Uri) {
         _uiState.update { it.copy(isLoading = true, statusMessage = "Loading folder contents...") }

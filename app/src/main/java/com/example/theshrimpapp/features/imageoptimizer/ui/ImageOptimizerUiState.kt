@@ -17,6 +17,8 @@ data class ImageOptimizerUiState(
     val selectedImagesCount: Int = 0,
     val selectedFolderUri: Uri? = null,
     val selectedFolderName: String? = null,
+    val outputFolderUri: Uri? = null,
+    val outputFolderName: String? = null,
     val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
     val maxDimension: Int = 1920,
     val maxDimensionInput: String = "1920",

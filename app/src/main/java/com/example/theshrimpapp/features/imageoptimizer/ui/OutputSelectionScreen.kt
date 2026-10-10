@@ -33,6 +33,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +50,9 @@ fun OutputSelectionScreen(
     viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val outputPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(viewModel::selectOutputFolder)
+    }
 
     Column(
         modifier = modifier
@@ -82,6 +93,37 @@ fun OutputSelectionScreen(
         }
 
         // Processing Mode Selection (Lossless Optimize vs Reduce Size)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Save output", style = MaterialTheme.typography.titleMedium)
+                Text(uiState.outputFolderName ?: if (uiState.selectedFolderUri != null)
+                    "Optimized subfolder in ${uiState.selectedFolderName ?: "source folder"}"
+                    else "Choose an output folder to save selected images.")
+                OutlinedButton(onClick = { outputPicker.launch(uiState.outputFolderUri) },
+                    enabled = !uiState.isProcessing && !uiState.isLoading) {
+                    Text("Choose output folder")
+                }
+                if (uiState.selectedFolderUri != null && uiState.outputFolderUri != null) {
+                    OutlinedButton(onClick = viewModel::useDefaultOutputFolder,
+                        enabled = !uiState.isProcessing && !uiState.isLoading) {
+                        Text("Use source's Optimized subfolder")
+                    }
+                }
+                Text(uiState.statusMessage)
+                if (uiState.isProcessing || uiState.isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Save one image at a time", style = MaterialTheme.typography.bodySmall)
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp)) {
+                    items(uiState.selectedImages, key = { it.uri.toString() }) { image ->
+                        Button(onClick = { viewModel.saveImage(image.uri) },
+                            enabled = !uiState.isProcessing && !uiState.isLoading && uiState.optionsError == null &&
+                                (uiState.outputFolderUri != null || uiState.selectedFolderUri != null)) {
+                            Text("Save ${image.name ?: "image"}")
+                        }
+                    }
+                }
+            }
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {

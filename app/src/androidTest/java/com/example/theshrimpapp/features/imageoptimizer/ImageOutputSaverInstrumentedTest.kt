@@ -1,0 +1,139 @@
+package com.example.theshrimpapp.features.imageoptimizer
+
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
+import android.provider.DocumentsProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.theshrimpapp.features.imageoptimizer.data.ImageOutputSaver
+import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
+import com.example.theshrimpapp.features.imageoptimizer.domain.*
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+/** Test-only SAF provider with deterministic failure modes; never shipped in the app. */
+class SaveTestDocumentsProvider : DocumentsProvider() {
+    private val root get() = File(requireNotNull(context).cacheDir, "save-provider").apply { mkdirs() }
+    override fun onCreate() = true
+    override fun queryRoots(projection: Array<out String>?): Cursor = MatrixCursor(arrayOf("root_id"))
+    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor = rows(listOf(documentId))
+    override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor =
+        rows(file(parentDocumentId).listFiles().orEmpty().map { it.relativeTo(root).invariantSeparatorsPath })
+
+    private fun file(id: String) = if (id == "root") root else File(root, id)
+    private fun rows(ids: List<String>): Cursor {
+        val cursor = MatrixCursor(arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
+            Document.COLUMN_MIME_TYPE, Document.COLUMN_FLAGS, Document.COLUMN_SIZE))
+        ids.forEach { id ->
+            val f = file(id)
+            cursor.addRow(arrayOf<Any>(id, f.name, if (f.isDirectory) Document.MIME_TYPE_DIR else "image/webp",
+                Document.FLAG_DIR_SUPPORTS_CREATE or Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE,
+                f.length()))
+        }
+        return cursor
+    }
+    override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
+        if (File(root, "return-source").exists()) return "source.png"
+        val created = File(file(parentDocumentId), displayName)
+        check(!created.exists())
+        if (mimeType == Document.MIME_TYPE_DIR) check(created.mkdir()) else check(created.createNewFile())
+        return created.relativeTo(root).invariantSeparatorsPath
+    }
+    override fun deleteDocument(documentId: String) { check(file(documentId).delete()) }
+    override fun isChildDocument(parentDocumentId: String, documentId: String) =
+        file(documentId).canonicalPath.startsWith(file(parentDocumentId).canonicalPath + File.separator)
+    override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
+        if (mode.contains('w') && File(root, "deny-write").exists()) throw java.io.IOException("Write denied")
+        // Corruption on reopen simulates a provider accepting an incomplete write.
+        if (mode == "r" && File(root, "corrupt-read").exists()) file(documentId).writeBytes(byteArrayOf(0))
+        return ParcelFileDescriptor.open(file(documentId), ParcelFileDescriptor.parseMode(mode))
+    }
+}
+
+@RunWith(AndroidJUnit4::class)
+class ImageOutputSaverInstrumentedTest {
+    private val context = InstrumentationRegistry.getInstrumentation().context
+    private val root = File(context.cacheDir, "save-provider")
+    private val tree = DocumentsContract.buildTreeDocumentUri("com.example.theshrimpapp.test.save", "root")
+    private lateinit var input: File
+    private val payload = byteArrayOf(1, 2, 3, 4)
+
+    @Before fun reset() {
+        root.deleteRecursively()
+        root.mkdirs()
+        input = File(root, "source.png").apply { writeBytes(ByteArray(20) { 9 }) }
+    }
+
+    private fun saver(unchanged: Boolean = false, originalSize: Long = 20) = ImageOutputSaver(context, context.contentResolver,
+        object : ImageProcessor {
+            override suspend fun process(inputUri: Uri, outputUri: Uri, options: ImageProcessingOptions): ImageProcessingResult {
+                if (unchanged) return ImageProcessingResult.Unchanged("Already optimized")
+                File(requireNotNull(outputUri.path)).writeBytes(payload)
+                return ImageProcessingResult.Success(originalSize, 4, OutputFormat.WEBP_LOSSLESS, 1, 1, 16, 80f, options.processingMode)
+            }
+        })
+
+    @Test fun savesAndResolvesCollisionWithoutChangingOriginal() = runBlocking {
+        File(root, "source_optimized.webp").writeBytes(byteArrayOf(7))
+        val result = saver().save(Uri.fromFile(input), input.name, tree, null, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Saved)
+        result as SaveImageResult.Saved
+        assertEquals("source_optimized_1.webp", result.name)
+        assertEquals(4L, result.details.outputSizeBytes)
+        assertArrayEquals(payload, File(root, result.name).readBytes())
+        assertArrayEquals(byteArrayOf(7), File(root, "source_optimized.webp").readBytes())
+        assertArrayEquals(ByteArray(20) { 9 }, input.readBytes())
+    }
+
+    @Test fun defaultsToOptimizedSubfolder() = runBlocking {
+        val result = saver().save(Uri.fromFile(input), input.name, null, tree, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Saved)
+        assertArrayEquals(payload, File(root, "Optimized/source_optimized.webp").readBytes())
+    }
+
+    @Test fun unchangedDoesNotCreateOutputOrFolder() = runBlocking {
+        val result = saver(true).save(Uri.fromFile(input), input.name, null, tree, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Unchanged)
+        assertEquals(listOf("source.png"), root.listFiles()!!.map { it.name })
+    }
+
+    @Test fun failedWriteCleansUpAndKeepsSource() = runBlocking {
+        File(root, "deny-write").createNewFile()
+        val result = saver().save(Uri.fromFile(input), input.name, tree, null, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Failed)
+        assertFalse(File(root, "source_optimized.webp").exists())
+        assertArrayEquals(ByteArray(20) { 9 }, input.readBytes())
+    }
+
+    @Test fun detectsCorruptSavedContentAndRemovesIt() = runBlocking {
+        File(root, "corrupt-read").createNewFile()
+        val result = saver().save(Uri.fromFile(input), input.name, tree, null, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Failed)
+        assertFalse(File(root, "source_optimized.webp").exists())
+        assertArrayEquals(ByteArray(20) { 9 }, input.readBytes())
+    }
+
+    @Test fun rejectsProviderReturningOriginalDocumentWithDifferentUri() = runBlocking {
+        File(root, "return-source").createNewFile()
+        val source = DocumentsContract.buildDocumentUri("com.example.theshrimpapp.test.save", "source.png")
+        val result = saver().save(source, input.name, tree, null, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Failed)
+        assertArrayEquals(ByteArray(20) { 9 }, input.readBytes())
+    }
+
+    @Test fun rejectsNonSmallerLosslessCandidateBeforeCreatingOutput() = runBlocking {
+        val result = saver(originalSize = 4).save(Uri.fromFile(input), input.name, null, tree, ImageProcessingOptions())
+        assertTrue(result is SaveImageResult.Failed)
+        assertFalse(File(root, "Optimized").exists())
+        assertEquals(listOf("source.png"), root.listFiles()!!.map { it.name })
+    }
+}
