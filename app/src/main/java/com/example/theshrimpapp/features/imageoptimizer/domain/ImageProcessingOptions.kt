@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 enum class ProcessingMode(val displayName: String) {
     LOSSLESS_OPTIMIZE("Lossless Optimize"),
-    REDUCE_SIZE("Reduce Size")
+    REDUCE_SIZE("Resize & Convert")
 }
 
 enum class OutputFormat(
@@ -32,6 +32,7 @@ enum class JpegBackgroundColor(
 data class ImageProcessingOptions(
     val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
     val maxDimension: Int = 1920,
+    val keepOriginalSize: Boolean = false,
     val outputFormat: OutputFormat = OutputFormat.WEBP_LOSSY,
     val quality: Int = 85,
     val backgroundColor: Color = Color.White,
@@ -41,7 +42,7 @@ data class ImageProcessingOptions(
         return when (processingMode) {
             ProcessingMode.LOSSLESS_OPTIMIZE -> true
             ProcessingMode.REDUCE_SIZE -> {
-                val dimValid = maxDimension in 1..10000
+                val dimValid = keepOriginalSize || maxDimension in 1..10000
                 val qualityValid = if (outputFormat.supportsQuality) quality in 1..100 else true
                 dimValid && qualityValid
             }

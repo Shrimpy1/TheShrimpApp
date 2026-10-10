@@ -245,6 +245,8 @@ Tasks:
   optimization automatically.
 - [x] In `REDUCE_SIZE`, provide dimension, format, and lossy-quality settings as specified in
   `SPEC.md`.
+- [x] Label this mode **Resize & Convert**, offer **Keep original size** alongside dimension
+  presets/custom input, and use only a slider with the current value for compression quality.
 - [x] Apply supported final lossless optimization automatically in both modes; do not expose
   encoder-specific controls.
 - [x] Validate options so that selecting `LOSSLESS_OPTIMIZE` cannot trigger resizing or lossy
@@ -253,7 +255,7 @@ Tasks:
 Acceptance criteria:
 
 - Lossless Optimize is the default and needs no encoder-specific user configuration.
-- User must explicitly choose Reduce Size mode to resize or use lossy encoding.
+- User must explicitly choose Resize & Convert mode to resize or use lossy encoding.
 - Invalid/incompatible settings cannot start processing.
 - The selected mode controls which transformations are permitted; applicable lossless final
   optimization is shared by both modes.
@@ -297,7 +299,7 @@ Acceptance criteria:
 - An output is accepted as an optimization only if valid and strictly smaller than the source.
 - Optimizer failure never triggers an implicit lossy fallback.
 
-### US-007 — Resize and convert one image in Reduce Size mode
+### US-007 — Resize and convert one image in Resize & Convert mode
 
 **Priority:** P0 · **Milestone:** M3
 
@@ -306,7 +308,7 @@ smaller size over perfect pixel preservation.
 
 Tasks:
 
-- [x] Create the `ImageProcessor` for the Reduce Size pipeline, independent of Compose and screen
+- [x] Create the `ImageProcessor` for the Resize & Convert pipeline, independent of Compose and screen
   classes.
 - [x] Inspect bounds before decoding a full bitmap and use sampled decoding for large inputs where
   appropriate.
@@ -331,7 +333,7 @@ Acceptance criteria:
 - A single valid image produces correctly oriented output with expected dimensions.
 - Aspect ratio is preserved and no-upscaling behavior works.
 - JPEG output has a defined background when the input contains transparency.
-- Lossy behavior occurs only in Reduce Size mode.
+- Lossy behavior occurs only in Resize & Convert mode.
 - Unsupported or corrupted input produces a handled error.
 - Lossless post-optimization does not alter the decoded pixel content of the encoded candidate and
   never replaces it with an invalid or larger file.
@@ -385,7 +387,7 @@ Tasks:
 
 - [ ] Implement sequential processing of the queue, applying the selected mode consistently to every
   file.
-- [ ] Run lossless optimization or Reduce Size decode/resize/encoding and file I/O off the main
+- [ ] Run lossless optimization or Resize & Convert decode/resize/encoding and file I/O off the main
   thread using appropriate coroutine dispatchers.
 - [ ] Prevent accidental duplicate concurrent launches.
 - [ ] Model batch status, completed count, current filename, per-file result, and cancellation
@@ -549,7 +551,7 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules in Reduce Size
+- [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules in Resize & Convert
   mode.
 - [x] Test lossless optimizer invariants: decoded pixel equality, unchanged dimensions,
   transparency, color/orientation semantics, and metadata policy.
@@ -575,7 +577,7 @@ Tasks:
 - [ ] Test Photo Picker selection and cancellation.
 - [ ] Test SAF tree selection and retained permissions.
 - [ ] Test read/write, folder creation, rename, and delete with supported providers.
-- [ ] Test JPEG, PNG transparency, WebP lossy/lossless, and EXIF orientation in Reduce Size mode.
+- [ ] Test JPEG, PNG transparency, WebP lossy/lossless, and EXIF orientation in Resize & Convert mode.
 - [ ] Test each integrated lossless optimizer against known inputs and compare decoded pixels with
   the source.
 - [ ] Test that metadata is preserved by default and stripped only when the user opts in.
@@ -617,11 +619,11 @@ unless a dependency clearly allows parallel work.
 3. [x] **Architecture:** US-002 — Hilt, ViewModel, `StateFlow`, lifecycle-aware collection.
 4. [x] **Input:** US-003 — Photo Picker and queue.
 5. [x] **Folder authorization:** US-004 — SAF tree selection and metadata.
-6. [x] **Processing options:** US-005 — default Lossless Optimize mode and explicit Reduce Size
+6. [x] **Processing options:** US-005 — default Lossless Optimize mode and explicit Resize & Convert
    mode.
 7. [x] **Lossless processing:** US-006 — integrate/test format-specific optimizers and keep only
    smaller valid candidates.
-8. [x] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Reduce Size mode.
+8. [x] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Resize & Convert mode.
 9. [ ] **Output:** US-008 — choose destination and safely write output.
 10. [ ] **Batch engine:** US-009 — sequential processing, progress, cancellation, per-file status.
 11. [ ] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.
@@ -649,7 +651,7 @@ verified:
   required color/orientation semantics.
 - [ ] A lossless output is retained only when valid and strictly smaller than the original;
   equal/larger candidates leave the original unchanged and are reported as no savings.
-- [ ] Reduce Size mode is explicit and supports JPEG, PNG, and WebP inputs with appropriate
+- [ ] Resize & Convert mode is explicit and supports JPEG, PNG, and WebP inputs with appropriate
   resize/encoding settings.
 - [ ] Multiple JPEG, PNG, and WebP images can be processed in a batch.
 - [ ] Output is written to an authorized writable location and originals are preserved by default.

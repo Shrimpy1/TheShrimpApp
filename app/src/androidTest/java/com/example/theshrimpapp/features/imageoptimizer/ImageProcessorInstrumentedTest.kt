@@ -85,6 +85,25 @@ class ImageProcessorInstrumentedTest {
     }
 
     @Test
+    fun testKeepOriginalSizeStillConvertsFormat() = runBlocking {
+        val input = createTestBitmapFile(800, 600, false)
+        val output = createTempFile("original-size-", ".webp")
+        val result = processor.process(Uri.fromFile(input), Uri.fromFile(output),
+            ImageProcessingOptions(
+                processingMode = ProcessingMode.REDUCE_SIZE,
+                maxDimension = 100,
+                keepOriginalSize = true,
+                outputFormat = OutputFormat.WEBP_LOSSY
+            ))
+        assertTrue(result is ImageProcessingResult.Success)
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(output.path, bounds)
+        assertEquals(800, bounds.outWidth)
+        assertEquals(600, bounds.outHeight)
+        assertEquals("image/webp", bounds.outMimeType)
+    }
+
+    @Test
     fun testReduceSizeResizingAndAspectPreservation() = runBlocking {
         val inputFile = createTestBitmapFile(800, 600, false)
         val outputFile = createTempFile("output-", ".webp")

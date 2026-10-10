@@ -149,14 +149,14 @@ fun OutputSelectionScreen(
                             Text(
                                 text = when (mode) {
                                     ProcessingMode.LOSSLESS_OPTIMIZE -> "Lossless Optimize (Default)"
-                                    ProcessingMode.REDUCE_SIZE -> "Reduce Size (Resize & Compress)"
+                                    ProcessingMode.REDUCE_SIZE -> mode.displayName
                                 },
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
                                 text = when (mode) {
                                     ProcessingMode.LOSSLESS_OPTIMIZE -> "Reduces file size without changing decoded pixels. No resizing or lossy compression."
-                                    ProcessingMode.REDUCE_SIZE -> "Resizes dimensions, changes formats, and applies lossy compression."
+                                    ProcessingMode.REDUCE_SIZE -> "Resize or keep original dimensions, convert formats, and adjust compression."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -232,6 +232,11 @@ fun OutputSelectionScreen(
                     )
 
                     // Presets row
+                    FilterChip(
+                        selected = uiState.keepOriginalSize,
+                        onClick = { viewModel.updateKeepOriginalSize(!uiState.keepOriginalSize) },
+                        label = { Text("Keep original size") }
+                    )
                     val presets = listOf(1280, 1920, 2560, 3840)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -239,7 +244,7 @@ fun OutputSelectionScreen(
                     ) {
                         presets.forEach { preset ->
                             FilterChip(
-                                selected = uiState.maxDimension == preset,
+                                selected = !uiState.keepOriginalSize && uiState.maxDimension == preset,
                                 onClick = { viewModel.updateMaxDimension(preset) },
                                 label = { Text("$preset px") },
                                 modifier = Modifier.weight(1f)
@@ -253,6 +258,7 @@ fun OutputSelectionScreen(
                         label = { Text("Custom Dimension (px)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.keepOriginalSize,
                         singleLine = true
                     )
                 }
@@ -285,14 +291,6 @@ fun OutputSelectionScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        OutlinedTextField(
-                            value = uiState.qualityInput,
-                            onValueChange = { viewModel.updateQualityInput(it) },
-                            label = { Text("Quality (1 - 100)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
                     }
                 }
             }

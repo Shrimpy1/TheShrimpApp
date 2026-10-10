@@ -235,6 +235,7 @@ class ImageOptimizerViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 maxDimension = clamped,
+                keepOriginalSize = false,
                 maxDimensionInput = clamped.toString(),
                 optionsError = null
             )
@@ -247,6 +248,7 @@ class ImageOptimizerViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     maxDimension = parsed,
+                    keepOriginalSize = false,
                     maxDimensionInput = input,
                     optionsError = null
                 )
@@ -255,6 +257,7 @@ class ImageOptimizerViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     maxDimensionInput = input,
+                    keepOriginalSize = false,
                     optionsError = "Max dimension must be between 1 and 10,000 px"
                 )
             }
@@ -265,34 +268,20 @@ class ImageOptimizerViewModel @Inject constructor(
         _uiState.update { it.copy(outputFormat = format) }
     }
 
+    fun updateKeepOriginalSize(keep: Boolean) {
+        _uiState.update {
+            it.copy(keepOriginalSize = keep, optionsError = if (keep ||
+                it.maxDimensionInput.toIntOrNull() in 1..10000) null
+                else "Max dimension must be between 1 and 10,000 px")
+        }
+    }
+
     fun updateQuality(quality: Int) {
         val clamped = quality.coerceIn(1, 100)
         _uiState.update {
             it.copy(
-                quality = clamped,
-                qualityInput = clamped.toString(),
-                optionsError = null
+                quality = clamped
             )
-        }
-    }
-
-    fun updateQualityInput(input: String) {
-        val parsed = input.toIntOrNull()
-        if (parsed != null && parsed in 1..100) {
-            _uiState.update {
-                it.copy(
-                    quality = parsed,
-                    qualityInput = input,
-                    optionsError = null
-                )
-            }
-        } else {
-            _uiState.update {
-                it.copy(
-                    qualityInput = input,
-                    optionsError = "Quality must be between 1 and 100"
-                )
-            }
         }
     }
 
@@ -309,6 +298,7 @@ class ImageOptimizerViewModel @Inject constructor(
         val options = ImageProcessingOptions(
             processingMode = state.processingMode,
             maxDimension = state.maxDimension,
+            keepOriginalSize = state.keepOriginalSize,
             outputFormat = state.outputFormat,
             quality = state.quality,
             backgroundColor = state.jpegBackgroundColor.color,

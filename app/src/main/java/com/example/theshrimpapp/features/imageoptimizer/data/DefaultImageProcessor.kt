@@ -89,7 +89,7 @@ class DefaultImageProcessor @Inject constructor(
             val targetWidth: Int
             val targetHeight: Int
 
-            if (actualWidth > maxDim || actualHeight > maxDim) {
+            if (!options.keepOriginalSize && (actualWidth > maxDim || actualHeight > maxDim)) {
                 if (actualWidth >= actualHeight) {
                     targetWidth = maxDim
                     targetHeight =

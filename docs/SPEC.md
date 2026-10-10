@@ -275,7 +275,7 @@ information. Do not silently perform a lossy operation when the user expects los
   metadata, and rendering semantics can be preserved. Do not resize or apply lossy compression. Keep
   the smallest valid candidate only if it is strictly smaller than the original; otherwise report no
   savings instead of creating a redundant output.
-- **Reduce Size (explicit user choice):** allow resizing, lossy compression, and format conversion
+- **Resize & Convert (explicit user choice):** allow resizing, lossy compression, and format conversion
   according to the user's settings. Explain in the UI that resizing discards spatial detail and
   lossy encoding can change pixels.
 - Lossless optimization should be automatic within Lossless Optimize mode; it should not require
@@ -289,7 +289,7 @@ information. Do not silently perform a lossy operation when the user expects los
   processing modes, automatically and without a separate user-facing toggle.
 - In **Lossless Optimize**, perform applicable lossless optimization on the original representation
   and evaluate compatible lossless alternatives. Do not resize or use lossy encoding.
-- In **Reduce Size**, complete resizing and format encoding first. Then apply applicable lossless
+- In **Resize & Convert**, complete resizing and format encoding first. Then apply applicable lossless
   optimization to the resulting encoded file. Do not optimize the original first when it will
   subsequently be resized or re-encoded.
 - Never apply another lossy encoding pass solely to reduce the size of an already lossy-encoded
@@ -338,7 +338,7 @@ information. Do not silently perform a lossy operation when the user expects los
 
 #### Output formats and lossy settings
 
-Initial normal output formats for Reduce Size mode:
+Initial normal output formats for Resize & Convert mode:
 
 - **JPEG:** broad compatibility and lossy compression; does not support transparency.
 - **WebP lossy:** suitable for photos and images where lossy compression is acceptable.
@@ -346,7 +346,8 @@ Initial normal output formats for Reduce Size mode:
   smaller and all preservation requirements are met.
 - **PNG:** lossless output, useful where transparency and broad compatibility are important.
 
-For lossy formats, use quality 85 as the default, configurable from 1 to 100. Quality is an encoder
+For lossy formats, use quality 85 as the default, configurable from 1 to 100 using a slider with
+the current value displayed; do not duplicate it with a text input. Quality is an encoder
 setting, not a universal measure of perceptual quality or file-size reduction. PNG must not appear
 to use the same lossy quality behavior as JPEG or lossy WebP.
 
@@ -354,13 +355,14 @@ At `minSdk` 30, use explicit `Bitmap.CompressFormat.WEBP_LOSSY` and `WEBP_LOSSLE
 appropriate. These bitmap APIs do not replace the need for format-specific lossless JPEG and PNG
 optimization. Do not use WebM for still images; WebM is primarily a video container.
 
-JPEG cannot represent alpha transparency. When converting transparent input to JPEG in Reduce Size
+JPEG cannot represent alpha transparency. When converting transparent input to JPEG in Resize & Convert
 mode, composite it onto a configurable background, white by default. Do not silently discard
 transparency without a defined policy.
 
-Lossless mode must not resize images. Reduce Size mode may offer the maximum-dimension presets of
-1280, 1920, 2560, and 3840 pixels, plus custom input. Preserve aspect ratio and do not upscale by
-default.
+Lossless mode must not resize images. Resize & Convert mode may offer the maximum-dimension presets of
+1280, 1920, 2560, and 3840 pixels, plus custom input and a **Keep original size** option. Keeping
+original size skips resizing while still allowing format conversion and compression. Preserve
+aspect ratio and do not upscale by default.
 
 ### 6.4 Batch processing
 
