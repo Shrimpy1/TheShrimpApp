@@ -547,12 +547,12 @@ Tasks:
 
 - [ ] Test scaling calculations, aspect-ratio preservation, and no-upscaling rules in Reduce Size
   mode.
-- [ ] Test lossless optimizer invariants: decoded pixel equality, unchanged dimensions,
+- [x] Test lossless optimizer invariants: decoded pixel equality, unchanged dimensions,
   transparency, color/orientation semantics, and metadata policy.
-- [ ] Test that equal/larger lossless candidates are discarded and originals remain unchanged.
+- [x] Test that equal/larger lossless candidates are discarded and originals remain unchanged.
 - [ ] Test output naming and duplicate-name policy.
 - [ ] Test size-difference calculations when output is smaller, equal, or larger.
-- [ ] Test corrupt/unsupported inputs and per-file failure handling.
+- [x] Test corrupt/unsupported inputs and per-file failure handling.
 - [ ] Test ViewModel state transitions and cancellation behavior.
 - [ ] Test the shared post-optimization stage in both modes, verifying pixel preservation, fallback
   behavior, and the rule that a candidate is accepted only when valid and strictly smaller.
