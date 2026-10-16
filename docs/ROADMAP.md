@@ -32,7 +32,7 @@ order; change the order only when it makes implementation simpler.
 | **M1 — App shell and state architecture** | Single Activity, Compose Material 3, navigation, Hilt, and ViewModel/state patterns work             | M0         |
 | **M2 — Image and folder input**           | User can select images or authorize a folder; the app can inspect and list supported files           | M1         |
 | **M3 — Single-image processing**          | One image can be resized, converted, compressed, and saved without modifying the original            | M2         |
-| **M4 — Batch workflow**                   | Multiple images process sequentially with progress, cancellation, per-file results, and size savings | M3         |
+| **M4 — Batch workflow**                   | Multiple images process in bounded parallel background jobs with progress, cancellation, per-file results, and size savings | M3         |
 | **M5 — File management**                  | User can browse an authorized folder and perform supported create, rename, and delete operations     | M2         |
 | **M6 — Preferences and UX refinement**    | Useful defaults persist; empty, error, and completion states are polished                            | M3–M5      |
 | **M7 — Verification and local release**   | Core acceptance criteria pass on the target phone and a local APK can be installed                   | M0–M6      |
@@ -385,22 +385,34 @@ have to repeat the same operation manually.
 
 Tasks:
 
-- [ ] Implement sequential processing of the queue, applying the selected mode consistently to every
-  file.
-- [ ] Run lossless optimization or Resize & Convert decode/resize/encoding and file I/O off the main
+- [x] Process the persisted queue with bounded concurrency (four by default, configurable one to
+  eight), applying the selected mode consistently to every file.
+- [x] Run lossless optimization or Resize & Convert decode/resize/encoding and file I/O off the main
   thread using appropriate coroutine dispatchers.
-- [ ] Prevent accidental duplicate concurrent launches.
-- [ ] Model batch status, completed count, current filename, per-file result, and cancellation
+- [x] Prevent accidental duplicate concurrent launches.
+- [x] Model batch status, completed count, active filenames, ordered per-file results, and cancellation
   status.
-- [ ] Update observable ViewModel state as each file finishes.
-- [ ] Allow cancellation between files and handle cancellation during an individual operation as far
+- [x] Update observable ViewModel state as each file finishes.
+- [x] Allow cancellation between files and handle cancellation during an individual operation as far
   as practical.
-- [ ] Continue after per-file failures and record those failures.
-- [ ] Release references to each processed bitmap before moving to the next item.
+- [x] Continue after per-file failures and record those failures.
+- [x] Release references to each processed bitmap after each item.
+- [x] Add Room job/item persistence, idempotent prepared-output recovery, and retained/staged URI inputs.
+- [x] Integrate Hilt CoroutineWorker submission, foreground notifications and cancellation, and
+  restore progress through Room flows when the UI reopens.
+- [x] Distinguish persisted user cancellation from system interruption and retry unfinished work.
+
+Verification: Debug build and lint pass. All 15 JVM tests (including nine batch tests) and all 33
+Android instrumentation tests pass on the connected Android 16 phone. Tests cover bounded
+concurrency, ordering, failure isolation, cancellation, durable Room restoration, retry skipping,
+prepared-output recovery, and real WorkManager/Hilt foreground scheduling. Restart recovery is
+simulated by reopening Room/recreating workers; forced process death and provider crash windows
+have not been exercised. The existing KSP/Kotlin version warning remains; an opt-in lint detector
+crash is suppressed specifically on the Application class.
 
 Acceptance criteria:
 
-- A batch processes multiple supported images sequentially.
+- A batch processes supported images with bounded concurrency and preserves result ordering.
 - Progress updates without freezing the UI.
 - Canceling stops future work; completed outputs remain and final state accurately reports partial
   completion.
@@ -625,7 +637,7 @@ unless a dependency clearly allows parallel work.
    smaller valid candidates.
 8. [x] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Resize & Convert mode.
 9. [ ] **Output:** US-008 — choose destination and safely write output.
-10. [ ] **Batch engine:** US-009 — sequential processing, progress, cancellation, per-file status.
+10. [x] **Batch engine:** US-009 — bounded parallel background processing, persistence, progress, cancellation, per-file status.
 11. [ ] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.
 12. [ ] **Files screen:** US-011, then US-012 and US-013.
 13. [ ] **Preferences and polish:** US-014, US-015.
@@ -670,8 +682,8 @@ Do not implement these as part of the first pass unless the scope changes:
 - [ ] Recursive processing through all subfolders (first decide whether it is needed).
 - [ ] AVIF/HEIF encoding and format benchmarking; evaluate platform codec availability,
   compatibility, and file-size/quality trade-offs before adding.
-- [ ] Processing history or a database of prior runs.
-- [ ] WorkManager/background processing that must survive process termination.
+- [ ] Browsable processing history (Room job checkpoints are implemented in US-009).
+- [x] WorkManager/background processing moved into US-009 by explicit scope expansion.
 - [ ] Video conversion, including WebM output.
 - [ ] Cloud sync, accounts, telemetry, or backend services.
 - [ ] Advanced image editing or additional utility features.

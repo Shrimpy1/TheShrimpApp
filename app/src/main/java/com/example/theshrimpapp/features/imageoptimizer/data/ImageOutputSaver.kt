@@ -125,7 +125,7 @@ class ImageOutputSaver @Inject constructor(
         } catch (e: Exception) {
             result = SaveImageResult.Failed(e.localizedMessage ?: "Could not save output. Choose another location.")
         } finally {
-            if (!committed && created != null && !runCatching { created.delete() }.getOrDefault(false)) {
+            if (!committed && created != null && !cancellationAwareRunCatching { created.delete() }.getOrDefault(false)) {
                 cleanupWarning = " An incomplete output could not be removed from the output folder."
             }
             candidate?.delete()
@@ -149,7 +149,7 @@ class ImageOutputSaver @Inject constructor(
     private fun sameDocument(first: Uri, second: Uri): Boolean {
         if (first == second) return true
         if (first.authority != second.authority) return false
-        return runCatching {
+        return cancellationAwareRunCatching {
             DocumentsContract.getDocumentId(first) == DocumentsContract.getDocumentId(second)
         }.getOrDefault(false)
     }

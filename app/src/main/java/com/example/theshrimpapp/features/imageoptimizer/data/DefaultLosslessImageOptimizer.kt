@@ -34,7 +34,7 @@ class DefaultLosslessImageOptimizer @Inject constructor(
 
         val format = try {
             detectFormat(inputUri)
-        } catch (e: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (e: Exception) {
             return@withContext ImageOptimizationResult.Failed(
                 e.localizedMessage ?: "Could not read the selected image."
             )

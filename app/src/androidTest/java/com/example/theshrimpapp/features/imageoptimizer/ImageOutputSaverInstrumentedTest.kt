@@ -1,6 +1,10 @@
 package com.example.theshrimpapp.features.imageoptimizer
 
 import android.database.Cursor
+import android.content.ContentResolver
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.content.pm.ProviderInfo
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.CancellationSignal
@@ -19,25 +23,32 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerViewModel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 
 /** Test-only SAF provider with deterministic failure modes; never shipped in the app. */
 class SaveTestDocumentsProvider : DocumentsProvider() {
     private val root get() = File(requireNotNull(context).cacheDir, "save-provider").apply { mkdirs() }
     override fun onCreate() = true
     override fun queryRoots(projection: Array<out String>?): Cursor = MatrixCursor(arrayOf("root_id"))
-    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor = rows(listOf(documentId))
+    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor = rows(listOf(documentId), projection)
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor =
-        rows(file(parentDocumentId).listFiles().orEmpty().map { it.relativeTo(root).invariantSeparatorsPath })
+        rows(file(parentDocumentId).listFiles().orEmpty().map { it.relativeTo(root).invariantSeparatorsPath }, projection)
 
     private fun file(id: String) = if (id == "root") root else File(root, id)
-    private fun rows(ids: List<String>): Cursor {
-        val cursor = MatrixCursor(arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
-            Document.COLUMN_MIME_TYPE, Document.COLUMN_FLAGS, Document.COLUMN_SIZE))
+    private fun rows(ids: List<String>, projection: Array<out String>?): Cursor {
+        val columns = projection ?: arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
+            Document.COLUMN_MIME_TYPE, Document.COLUMN_FLAGS, Document.COLUMN_SIZE)
+        val cursor = MatrixCursor(columns)
         ids.forEach { id ->
             val f = file(id)
-            cursor.addRow(arrayOf<Any>(id, f.name, if (f.isDirectory) Document.MIME_TYPE_DIR else "image/webp",
-                Document.FLAG_DIR_SUPPORTS_CREATE or Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE,
-                f.length()))
+            val values = mapOf<String, Any>(Document.COLUMN_DOCUMENT_ID to id,
+                Document.COLUMN_DISPLAY_NAME to f.name,
+                Document.COLUMN_MIME_TYPE to if (f.isDirectory) Document.MIME_TYPE_DIR else "image/webp",
+                Document.COLUMN_FLAGS to (Document.FLAG_DIR_SUPPORTS_CREATE or Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE),
+                Document.COLUMN_SIZE to f.length())
+            cursor.addRow(columns.map { values[it] }.toTypedArray())
         }
         return cursor
     }
@@ -61,13 +72,30 @@ class SaveTestDocumentsProvider : DocumentsProvider() {
 
 @RunWith(AndroidJUnit4::class)
 class ImageOutputSaverInstrumentedTest {
-    private val context = InstrumentationRegistry.getInstrumentation().context
-    private val root = File(context.cacheDir, "save-provider")
+    private val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+    private lateinit var context: ContextWrapper
+    private lateinit var resolver: ContentResolver
+    private val root = File(targetContext.cacheDir, "save-provider")
     private val tree = DocumentsContract.buildTreeDocumentUri("com.example.theshrimpapp.test.save", "root")
     private lateinit var input: File
     private val payload = byteArrayOf(1, 2, 3, 4)
 
     @Before fun reset() {
+        context = object : ContextWrapper(targetContext) {
+            override fun getContentResolver() = resolver
+            override fun checkCallingOrSelfUriPermission(uri: Uri, modeFlags: Int) =
+                if (uri.authority == tree.authority) PackageManager.PERMISSION_GRANTED
+                else super.checkCallingOrSelfUriPermission(uri, modeFlags)
+        }
+        val provider = SaveTestDocumentsProvider()
+        provider.attachInfo(context, ProviderInfo().apply {
+            authority = tree.authority
+            exported = true
+            grantUriPermissions = true
+            readPermission = "android.permission.MANAGE_DOCUMENTS"
+            writePermission = "android.permission.MANAGE_DOCUMENTS"
+        })
+        resolver = ContentResolver.wrap(provider)
         root.deleteRecursively()
         root.mkdirs()
         input = File(root, "source.png").apply { writeBytes(ByteArray(20) { 9 }) }
@@ -85,7 +113,7 @@ class ImageOutputSaverInstrumentedTest {
     @Test fun savesAndResolvesCollisionWithoutChangingOriginal() = runBlocking {
         File(root, "source_optimized.webp").writeBytes(byteArrayOf(7))
         val result = saver().save(Uri.fromFile(input), input.name, tree, null, ImageProcessingOptions())
-        assertTrue(result is SaveImageResult.Saved)
+        assertTrue(result.toString(), result is SaveImageResult.Saved)
         result as SaveImageResult.Saved
         assertEquals("source_optimized_1.webp", result.name)
         assertEquals(4L, result.details.outputSizeBytes)
@@ -96,7 +124,7 @@ class ImageOutputSaverInstrumentedTest {
 
     @Test fun defaultsToOptimizedSubfolder() = runBlocking {
         val result = saver().save(Uri.fromFile(input), input.name, null, tree, ImageProcessingOptions())
-        assertTrue(result is SaveImageResult.Saved)
+        assertTrue(result.toString(), result is SaveImageResult.Saved)
         assertArrayEquals(payload, File(root, "Optimized/source_optimized.webp").readBytes())
     }
 
@@ -136,4 +164,5 @@ class ImageOutputSaverInstrumentedTest {
         assertFalse(File(root, "Optimized").exists())
         assertEquals(listOf("source.png"), root.listFiles()!!.map { it.name })
     }
+
 }

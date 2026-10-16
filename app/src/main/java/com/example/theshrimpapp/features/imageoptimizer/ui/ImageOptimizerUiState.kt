@@ -4,6 +4,8 @@ import android.net.Uri
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
+import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 
 data class ImageItem(
     val uri: Uri,
@@ -29,6 +31,9 @@ data class ImageOptimizerUiState(
     val preserveMetadata: Boolean = true,
     val optionsError: String? = null,
     val isProcessing: Boolean = false,
+    val batchJobId: String? = null,
+    val concurrency: Int = 4,
+    val batch: BatchProgress<ImageItem, SaveImageResult> = BatchProgress(),
     val isLoading: Boolean = false,
     val statusMessage: String = "Ready to select images or folder"
 )

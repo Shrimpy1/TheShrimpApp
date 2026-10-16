@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.graphics.get
 import androidx.exifinterface.media.ExifInterface
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageOptimizationResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
@@ -205,17 +206,19 @@ class WebpLosslessOptimizer @Inject constructor(
             ImageOptimizationResult.Failed(e.message ?: "The WebP file is invalid or unsupported.")
         } catch (e: OutOfMemoryError) {
             ImageOptimizationResult.Failed("The WebP is too large to process safely in available memory.")
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            throw cancel
         } catch (e: Exception) {
             ImageOptimizationResult.Failed(e.localizedMessage ?: "Unknown WebP optimization error.")
         } finally {
             if (expectedBitmap != null && expectedBitmap !== originalBitmap) {
-                runCatching { expectedBitmap?.recycle() }
+                cancellationAwareRunCatching { expectedBitmap?.recycle() }
             }
-            runCatching { originalBitmap?.recycle() }
+            cancellationAwareRunCatching { originalBitmap?.recycle() }
             if (outputWriteAttempted && !outputCommitted) {
-                runCatching { contentResolver.delete(outputUri, null, null) }
+                cancellationAwareRunCatching { contentResolver.delete(outputUri, null, null) }
             }
-            temporaries.forEach { runCatching { it.delete() } }
+            temporaries.forEach { cancellationAwareRunCatching { it.delete() } }
         }
     }
 
@@ -315,7 +318,7 @@ class WebpLosslessOptimizer @Inject constructor(
             }
             for (y in 0 until expected.height) {
                 for (x in 0 until expected.width) {
-                    if (expected.getPixel(x, y) != decoded.getPixel(x, y)) {
+                    if (expected[x, y] != decoded[x, y]) {
                         throw WebpFormatException("Lossless WebP validation found a changed pixel at ($x, $y).")
                     }
                 }
@@ -491,12 +494,14 @@ class WebpLosslessOptimizer @Inject constructor(
             ExifInterface.TAG_ORIENTATION,
             ExifInterface.ORIENTATION_UNDEFINED
         )
+    } catch (cancel: kotlinx.coroutines.CancellationException) {
+        throw cancel
     } catch (_: Exception) {
         ExifInterface.ORIENTATION_UNDEFINED
     }
 
     private fun ensureWebpOutputTarget(uri: Uri): String? {
-        val mimeType = runCatching { contentResolver.getType(uri) }.getOrNull()
+        val mimeType = cancellationAwareRunCatching { contentResolver.getType(uri) }.getOrNull()
         if (mimeType != null && mimeType !in setOf("image/webp", "application/octet-stream")) {
             return "The output destination is not identified as WebP. Choose a .webp destination."
         }
@@ -508,7 +513,7 @@ class WebpLosslessOptimizer @Inject constructor(
     }
 
     private fun isOutputTargetEmpty(uri: Uri): Boolean? {
-        val reportedSize = runCatching {
+        val reportedSize = cancellationAwareRunCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
                 ?.use { cursor ->
                     if (cursor.moveToFirst()) {
@@ -521,12 +526,14 @@ class WebpLosslessOptimizer @Inject constructor(
         return try {
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { it.read() == -1 }
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            throw cancel
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun queryDisplayName(uri: Uri): String? = runCatching {
+    private fun queryDisplayName(uri: Uri): String? = cancellationAwareRunCatching {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(

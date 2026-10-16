@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.net.Uri
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageOptimizationResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
@@ -17,6 +18,7 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.LosslessImageOpti
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -68,6 +70,7 @@ class DefaultImageProcessor @Inject constructor(
         // Reduce Size Mode pipeline
         val tempCandidateFile = File.createTempFile("reduce-size-", ".tmp", context.cacheDir)
         val tempPostOptFile = File.createTempFile("post-opt-", ".tmp", context.cacheDir)
+        val ownedBitmaps = mutableListOf<Bitmap>()
 
         try {
             // 1. Read bounds and EXIF orientation
@@ -124,11 +127,13 @@ class DefaultImageProcessor @Inject constructor(
                 BitmapFactory.decodeStream(stream, null, decodeOptions)
             }
                 ?: return@withContext ImageProcessingResult.Failed("Could not open input stream for decoding.")
+            ownedBitmaps.add(decodedBitmap)
 
             // CHANGED: Apply EXIF orientation first, then resize from the oriented dimensions.
             // Keeping these as separate operations prevents rotated images from being stretched.
             val transformedBitmap =
                 transformBitmap(decodedBitmap, exifOrientation, targetWidth, targetHeight)
+            ownedBitmaps.add(transformedBitmap)
             if (transformedBitmap !== decodedBitmap) {
                 decodedBitmap.recycle()
             }
@@ -139,6 +144,7 @@ class DefaultImageProcessor @Inject constructor(
             } else {
                 transformedBitmap
             }
+            ownedBitmaps.add(finalBitmap)
             if (finalBitmap !== transformedBitmap) {
                 transformedBitmap.recycle()
             }
@@ -149,7 +155,9 @@ class DefaultImageProcessor @Inject constructor(
                 if (options.outputFormat.supportsQuality) options.quality.coerceIn(1, 100) else 100
 
             FileOutputStream(tempCandidateFile).use { fos ->
-                finalBitmap.compress(compressFormat, quality, fos)
+                if (!finalBitmap.compress(compressFormat, quality, fos)) {
+                    throw IOException("Image encoding failed.")
+                }
             }
             finalBitmap.recycle()
 
@@ -164,13 +172,17 @@ class DefaultImageProcessor @Inject constructor(
 
             // 8. Lossless post-optimization stage on final encoded candidate
             var winningFile = tempCandidateFile
-            val postOptResult = runCatching {
+            val postOptResult = try {
                 losslessImageOptimizer.optimize(
                     Uri.fromFile(tempCandidateFile),
                     Uri.fromFile(tempPostOptFile),
                     options
                 )
-            }.getOrNull()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null // Keep the valid encoded candidate if optional post-optimization fails.
+            }
 
             if (postOptResult is ImageOptimizationResult.Optimized) {
                 val postOptSize = tempPostOptFile.length()
@@ -211,17 +223,26 @@ class DefaultImageProcessor @Inject constructor(
                 percentageReduction = percentageReduction,
                 mode = ProcessingMode.REDUCE_SIZE
             )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: OutOfMemoryError) {
+            ImageProcessingResult.Failed("Not enough memory to process this image. Try a smaller dimension.")
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            throw cancel
         } catch (e: Exception) {
             ImageProcessingResult.Failed(e.localizedMessage ?: "Unknown processing error occurred.")
         } finally {
-            runCatching { tempCandidateFile.delete() }
-            runCatching { tempPostOptFile.delete() }
+            ownedBitmaps.forEach { if (!it.isRecycled) it.recycle() }
+            cancellationAwareRunCatching { tempCandidateFile.delete() }
+            cancellationAwareRunCatching { tempPostOptFile.delete() }
         }
     }
 
     private fun getFileSize(uri: Uri): Long {
         return try {
             contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            throw cancel
         } catch (_: Exception) {
             0L
         }
@@ -311,18 +332,18 @@ class DefaultImageProcessor @Inject constructor(
         }
 
         // Scale only after orientation, using actual oriented dimensions.
-        val result = if (
-            orientedBitmap.width != targetWidth || orientedBitmap.height != targetHeight
-        ) {
-            Bitmap.createScaledBitmap(orientedBitmap, targetWidth, targetHeight, true)
-        } else {
-            orientedBitmap
+        var result: Bitmap? = null
+        try {
+            result =
+                if (orientedBitmap.width != targetWidth || orientedBitmap.height != targetHeight) {
+                    orientedBitmap.scale(targetWidth, targetHeight)
+                } else {
+                    orientedBitmap
+                }
+            return result
+        } finally {
+            if (result !== orientedBitmap && orientedBitmap !== bitmap) orientedBitmap.recycle()
         }
-
-        if (result !== orientedBitmap && orientedBitmap !== bitmap) {
-            orientedBitmap.recycle()
-        }
-        return result
     }
 
     // CHANGED: BitmapFactory/Bitmap.compress() discard source EXIF. Copy readable EXIF
@@ -367,14 +388,15 @@ class DefaultImageProcessor @Inject constructor(
                         field.type == String::class.java &&
                         Modifier.isStatic(field.modifiers)
             }
-            .mapNotNull { field -> runCatching { field.get(null) as? String }.getOrNull() }
+            .mapNotNull { field -> cancellationAwareRunCatching { field.get(null) as? String }.getOrNull() }
             .distinct()
             .toList()
 
         val copiedTags = mutableSetOf<String>()
         for (tag in tagNames) {
             if (tag in skipTags) continue
-            val value = runCatching { sourceExif.getAttribute(tag) }.getOrNull() ?: continue
+            val value = cancellationAwareRunCatching { sourceExif.getAttribute(tag) }.getOrNull()
+                ?: continue
             val valueToWrite = when (tag) {
                 ExifInterface.TAG_IMAGE_WIDTH,
                 ExifInterface.TAG_PIXEL_X_DIMENSION -> outputWidth.toString()
@@ -384,7 +406,12 @@ class DefaultImageProcessor @Inject constructor(
 
                 else -> value
             }
-            if (runCatching { outputExif.setAttribute(tag, valueToWrite) }.isSuccess) {
+            if (cancellationAwareRunCatching {
+                    outputExif.setAttribute(
+                        tag,
+                        valueToWrite
+                    )
+                }.isSuccess) {
                 copiedTags += tag
             }
         }
@@ -406,17 +433,22 @@ class DefaultImageProcessor @Inject constructor(
         val width = bitmap.width
         val height = bitmap.height
         val output = createBitmap(width, height)
-        val canvas = Canvas(output)
+        try {
+            val canvas = Canvas(output)
 
-        val colorInt = android.graphics.Color.argb(
-            (backgroundColor.alpha * 255).toInt(),
-            (backgroundColor.red * 255).toInt(),
-            (backgroundColor.green * 255).toInt(),
-            (backgroundColor.blue * 255).toInt()
-        )
-        canvas.drawColor(colorInt)
-        canvas.drawBitmap(bitmap, 0f, 0f, null)
-        return output
+            val colorInt = android.graphics.Color.argb(
+                (backgroundColor.alpha * 255).toInt(),
+                (backgroundColor.red * 255).toInt(),
+                (backgroundColor.green * 255).toInt(),
+                (backgroundColor.blue * 255).toInt()
+            )
+            canvas.drawColor(colorInt)
+            canvas.drawBitmap(bitmap, 0f, 0f, null)
+            return output
+        } catch (e: Throwable) {
+            output.recycle()
+            throw e
+        }
     }
 
     private fun mapCompressFormat(format: OutputFormat): Bitmap.CompressFormat {

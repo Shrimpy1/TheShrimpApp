@@ -366,10 +366,15 @@ aspect ratio and do not upscale by default.
 
 ### 6.4 Batch processing
 
-- Process files sequentially in the initial release to keep memory use predictable.
-- Show total progress, completed count, current filename, and any failures.
+- Process up to four images concurrently by default, configurable from one to eight. Preserve input
+  and result ordering and publish thread-safe progress with all active filenames.
+- Show total progress, completed count, active filenames, and per-file failures.
 - Allow cancellation between files; do not promise an in-progress native operation can always be
   stopped instantly.
+- On a cancel request, show a cancelling state, finish and record all active images, then stop
+  before starting another. Keep completed outputs and report how many images were not processed.
+- Keep the queue, destination, and processing settings fixed for each run; disable edits while
+  processing is active.
 - Continue processing later files after an individual file fails.
 - Record success or failure for each input.
 - Release bitmap references and associated resources after processing each file.
@@ -507,9 +512,17 @@ holder**. Compose renders the current state rather than requiring imperative UI 
 - Keep CPU-heavy work and blocking I/O off the main thread.
 - Define cancellation behavior for the current image and remaining queue.
 - Prevent duplicate processing launches unless parallel execution is intentionally implemented.
-- `viewModelScope` is suitable for foreground processing coordinated by a screen. Consider
-  WorkManager only if future requirements demand work to remain scheduled or reliable when the app
-  leaves the foreground or the process is terminated.
+- Submit durable jobs through a Hilt-enabled WorkManager CoroutineWorker; persist jobs and item
+  checkpoints in Room and pass only a job ID in WorkManager Data. Run long batches as foreground
+  data-sync work with a progress notification and a durable cancellation action. Android quotas,
+  service timeouts, force-stop, and scheduling restrictions still apply.
+- Reopen the latest stored job through a Room flow. Distinguish user cancellation from interruption;
+  interrupted work resumes from checkpoints and skips terminal items. Keep durable candidates until
+  publication is verified and recorded. Reserve unique job/item output names, record created URIs,
+  verify existing content on retries, and never overwrite unrelated or completed documents.
+- Retain SAF destination permissions. Retain input read permission when offered; stage non-persistent
+  inputs in app-private storage before scheduling. Inaccessible inputs fail individually. Clean up
+  staging after terminal completion and recover queued submissions on application startup.
 - Persist user preferences, such as default format, quality, maximum dimension, and background
   color, using Preferences DataStore when implemented.
 - Persist authorized directory URIs when possible, and handle permissions that have been revoked or
@@ -647,7 +660,7 @@ failure appropriately.
    permissions and display file metadata.
 5. **Single-image processing:** Implement efficient decoding, orientation handling, resizing,
    compression, and output saving.
-6. **Batch processing:** Add a queue, sequential execution, progress, cancellation, per-file
+6. **Batch processing:** Add a durable queue, bounded parallel execution, progress, cancellation, per-file
    failures, and results summary.
 7. **File management:** Add directory creation, listing, rename, delete, duplicate handling, and
    safe output behavior.
@@ -690,7 +703,7 @@ Only consider these when the initial application is reliable:
 - Processing history and the ability to reopen output locations.
 - Additional file conversion utilities.
 - Android share-target integration for incoming images.
-- Optional background processing with WorkManager.
+- Additional scheduling policies beyond the implemented WorkManager batch execution.
 - Additional processing formats or metadata-preservation controls.
 - Separate Gradle feature modules if project size or dependency boundaries justify modularization.
 - Separate saved-state or persistence infrastructure if future features require more state to

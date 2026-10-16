@@ -35,6 +35,7 @@ import com.example.theshrimpapp.features.home.ui.HomeScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerViewModel
 import com.example.theshrimpapp.features.imageoptimizer.ui.OutputSelectionScreen
+import com.example.theshrimpapp.features.imageoptimizer.ui.ProcessingScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -130,6 +131,9 @@ fun ShrimpNavHost(
                     ImageOptimizerScreen(
                         onNavigateToOutput = {
                             navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.OUTPUT_ROUTE)
+                        },
+                        onNavigateToProcessing = {
+                            navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.PROCESSING_ROUTE)
                         }
                     )
                 }
@@ -140,6 +144,22 @@ fun ShrimpNavHost(
                     }
                     val viewModel: ImageOptimizerViewModel = hiltViewModel(parentEntry)
                     OutputSelectionScreen(
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onNavigateToProcessing = {
+                            navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.PROCESSING_ROUTE)
+                        },
+                        viewModel = viewModel
+                    )
+                }
+
+                composable(ShrimpTopLevelDestination.ImageOptimizer.PROCESSING_ROUTE) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
+                        navController.getBackStackEntry(ShrimpTopLevelDestination.ImageOptimizer.route)
+                    }
+                    val viewModel: ImageOptimizerViewModel = hiltViewModel(parentEntry)
+                    ProcessingScreen(
                         onBackClick = {
                             navController.popBackStack()
                         },

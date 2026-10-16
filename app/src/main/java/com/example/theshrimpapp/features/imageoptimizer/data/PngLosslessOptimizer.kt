@@ -164,7 +164,7 @@ class PngLosslessOptimizer @Inject constructor(
             result
         } catch (e: PngFormatException) {
             ImageOptimizationResult.Failed(e.message ?: "The PNG file is invalid or unsupported.")
-        } catch (e: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (e: Exception) {
             ImageOptimizationResult.Failed(
                 e.localizedMessage ?: "Unknown lossless optimization error. The original was not intentionally modified."
             )
@@ -172,10 +172,10 @@ class PngLosslessOptimizer @Inject constructor(
             // The destination was verified empty before writing. If writing or validation fails,
             // attempt to remove the incomplete output; never delete a pre-existing non-empty file.
             if (outputWriteAttempted && !outputCommitted) {
-                runCatching { contentResolver.delete(outputUri, null, null) }
+                cancellationAwareRunCatching { contentResolver.delete(outputUri, null, null) }
             }
             temporaryFiles.forEach { file ->
-                runCatching { file.delete() }
+                cancellationAwareRunCatching { file.delete() }
             }
         }
     }
@@ -219,10 +219,10 @@ class PngLosslessOptimizer @Inject constructor(
 
             val bytes = candidate.readBytes()
             ByteArrayResult(bytes, true, originalSize, bytes.size.toLong())
-        } catch (_: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
             ByteArrayResult(inputBytes, false, inputBytes.size.toLong(), inputBytes.size.toLong())
         } finally {
-            temporaryFiles.forEach { runCatching { it.delete() } }
+            temporaryFiles.forEach { cancellationAwareRunCatching { it.delete() } }
         }
     }
 
@@ -410,7 +410,7 @@ class PngLosslessOptimizer @Inject constructor(
             validatePngRawStream(index, raw.length())
             return digest
         } finally {
-            temporaryFiles.forEach { runCatching { it.delete() } }
+            temporaryFiles.forEach { cancellationAwareRunCatching { it.delete() } }
         }
     }
 
@@ -550,7 +550,7 @@ class PngLosslessOptimizer @Inject constructor(
                 ExifInterface.ORIENTATION_NORMAL
             )
         }
-    } catch (_: Exception) {
+    } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
         ExifInterface.ORIENTATION_NORMAL
     }
 
@@ -588,7 +588,7 @@ class PngLosslessOptimizer @Inject constructor(
     private fun ensurePngOutputTarget(uri: Uri): String? = validatePngOutputTarget(uri)
 
     private fun validatePngOutputTarget(uri: Uri): String? {
-        val mimeType = runCatching { contentResolver.getType(uri) }.getOrNull()
+        val mimeType = cancellationAwareRunCatching { contentResolver.getType(uri) }.getOrNull()
         if (mimeType != null && mimeType != "image/png" && mimeType != "application/octet-stream") {
             return "The output destination is not identified as PNG. Choose or create a .png destination."
         }
@@ -604,7 +604,7 @@ class PngLosslessOptimizer @Inject constructor(
      * its state cannot be verified. This prevents accidental overwrite through a distinct URI.
      */
     private fun isOutputTargetEmpty(uri: Uri): Boolean? {
-        val reportedSize = runCatching {
+        val reportedSize = cancellationAwareRunCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val index = cursor.getColumnIndex(OpenableColumns.SIZE)
@@ -617,12 +617,12 @@ class PngLosslessOptimizer @Inject constructor(
         return try {
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { it.read() == -1 }
-        } catch (_: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
             null
         }
     }
 
-    private fun queryDisplayName(uri: Uri): String? = runCatching {
+    private fun queryDisplayName(uri: Uri): String? = cancellationAwareRunCatching {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
         }

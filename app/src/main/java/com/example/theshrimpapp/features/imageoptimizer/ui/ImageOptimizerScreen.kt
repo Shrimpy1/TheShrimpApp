@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,6 +47,7 @@ import java.util.Locale
 @Composable
 fun ImageOptimizerScreen(
     onNavigateToOutput: () -> Unit,
+    onNavigateToProcessing: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
@@ -68,6 +70,7 @@ fun ImageOptimizerScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
             if (uiState.selectedImages.isNotEmpty()) {
                 Surface(
@@ -80,11 +83,17 @@ fun ImageOptimizerScreen(
                             .padding(16.dp)
                     ) {
                         Button(
-                            onClick = onNavigateToOutput,
+                            onClick = {
+                                if (uiState.isProcessing) {
+                                    onNavigateToProcessing()
+                                } else {
+                                    onNavigateToOutput()
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isLoading
                         ) {
-                            Text(text = "Proceed to Output Settings")
+                            Text(text = if (uiState.isProcessing) "View Batch Progress" else "Proceed to Output Settings")
                         }
                     }
                 }
@@ -101,156 +110,219 @@ fun ImageOptimizerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Action Buttons Row (Select Images & Select Folder)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        pickImagesLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isLoading
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null
-                        )
-                        Text(text = "Select Images")
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        openFolderLauncher.launch(null)
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isLoading
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = null
-                        )
-                        Text(text = "Select Folder")
-                    }
-                }
-            }
-
-            if (uiState.isLoading) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Overall Selection Summary Card & Pie Chart (displayed when images selected)
-            if (uiState.selectedImages.isNotEmpty()) {
-                val totalBytes = uiState.selectedImages.sumOf { it.sizeBytes ?: 0L }
-                val totalSizeStr = formatFileSize(if (totalBytes > 0) totalBytes else null)
-
+            if (uiState.isProcessing) {
+                // Active Processing Banner when a batch is currently running
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (uiState.selectedFolderName != null) {
-                            Text(
-                                text = "Folder: ${uiState.selectedFolderName}",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+
+                        Text(
+                            text = "Batch Processing in Progress",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        if (uiState.batch.totalCount > 0) {
+                            val progress = uiState.batch.completedCount.toFloat() / uiState.batch.totalCount
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth()
                             )
+
+                            Text(
+                                text = "${uiState.batch.completedCount} of ${uiState.batch.totalCount} processed",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
+                        Text(
+                            text = uiState.statusMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = onNavigateToProcessing,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Count", style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    text = "${uiState.selectedImages.size}",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Total Size",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = totalSizeStr,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
+                            Text(text = "View Batch Progress")
                         }
 
-                        // File Types Pie Chart
-                        FileTypePieChart(images = uiState.selectedImages)
-                    }
-                }
-            }
-
-            // Header and Queue List or Empty State
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Selected Queue (${uiState.selectedImages.size})",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                if (uiState.selectedImages.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = { viewModel.clearImages() },
-                        enabled = !uiState.isLoading
-                    ) {
-                        Text(text = "Clear All")
-                    }
-                }
-            }
-
-            if (uiState.selectedImages.isNotEmpty()) {
-                // Queue list bounded to max ~10 items long and scrollable
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(uiState.selectedImages, key = { it.uri.toString() }) { item ->
-                        ImageQueueItemCard(
-                            item = item,
-                            onRemove = { viewModel.removeImage(item.uri) }
+                        Text(
+                            text = "Queue modification and new batch creation are locked until processing completes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // Normal Selection Mode
+                // Action Buttons Row (Select Images & Select Folder)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            pickImagesLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !uiState.isLoading
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = null
+                            )
+                            Text(text = "Select Images")
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            openFolderLauncher.launch(null)
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !uiState.isLoading
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null
+                            )
+                            Text(text = "Select Folder")
+                        }
+                    }
+                }
+
+                if (uiState.isLoading) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Overall Selection Summary Card & Pie Chart (displayed when images selected)
+                if (uiState.selectedImages.isNotEmpty()) {
+                    val totalBytes = uiState.selectedImages.sumOf { it.sizeBytes ?: 0L }
+                    val totalSizeStr = formatFileSize(if (totalBytes > 0) totalBytes else null)
+
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (uiState.selectedFolderName != null) {
+                                Text(
+                                    text = "Folder: ${uiState.selectedFolderName}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Count", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        text = "${uiState.selectedImages.size}",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Total Size",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Text(
+                                        text = totalSizeStr,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
+                            }
+
+                            // File Types Pie Chart
+                            FileTypePieChart(images = uiState.selectedImages)
+                        }
+                    }
+                }
+
+                // Header and Queue List or Empty State
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (uiState.isLoading) "Loading selection..." else "No images selected yet.\nTap 'Select Images' or 'Select Folder' to begin.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Selected Queue (${uiState.selectedImages.size})",
+                        style = MaterialTheme.typography.titleMedium
                     )
+                    if (uiState.selectedImages.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { viewModel.clearImages() },
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text(text = "Clear All")
+                        }
+                    }
+                }
+
+                if (uiState.selectedImages.isNotEmpty()) {
+                    // Queue list bounded to max ~10 items long and scrollable
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(uiState.selectedImages, key = { it.uri.toString() }) { item ->
+                            ImageQueueItemCard(
+                                item = item,
+                                onRemove = { viewModel.removeImage(item.uri) },
+                                enabled = true
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (uiState.isLoading) "Loading selection..." else "No images selected yet.\nTap 'Select Images' or 'Select Folder' to begin.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -341,7 +413,8 @@ fun FileTypePieChart(
 @Composable
 fun ImageQueueItemCard(
     item: ImageItem,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    enabled: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -370,7 +443,7 @@ fun ImageQueueItemCard(
                 )
             }
 
-            IconButton(onClick = onRemove) {
+            IconButton(onClick = onRemove, enabled = enabled) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Remove image"

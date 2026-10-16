@@ -683,6 +683,21 @@ class LosslessImageOptimizerInstrumentedTest {
             }
 
             is ImageOptimizationResult.Unchanged -> assertFileIsEmpty(outputFile)
+            is ImageOptimizationResult.Unsupported -> {
+                // Some Android encoders attach ICCP even to an sRGB bitmap. This remains protected metadata.
+                val bytes = webpFile.readBytes()
+                var offset = 12
+                var hasIcc = false
+                while (offset + 8 <= bytes.size) {
+                    if (String(bytes, offset, 4, Charsets.US_ASCII) == "ICCP") { hasIcc = true; break }
+                    val size = (0..3).fold(0L) { value, i -> value or ((bytes[offset + 4 + i].toLong() and 255) shl (8 * i)) }
+                    val next = offset.toLong() + 8 + size + (size and 1)
+                    if (next > bytes.size) break
+                    offset = next.toInt()
+                }
+                assertTrue("Only the fixture's actual ICC profile may explain unsupported output", hasIcc && result.reason.contains("ICC"))
+                assertFileIsEmpty(outputFile)
+            }
             else -> fail("Valid static WebP should optimize, report no savings, or fail validation explicitly; got $result")
         }
         assertArrayEquals("WebP source must remain unchanged", sourceHash, sha256(webpFile))

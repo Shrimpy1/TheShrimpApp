@@ -139,13 +139,13 @@ class JpegLosslessOptimizer @Inject constructor(
                 bytesSaved = bytesSaved,
                 percentageReduction = (bytesSaved.toDouble() * 100.0 / originalSize.toDouble()).toFloat()
             )
-        } catch (e: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (e: Exception) {
             ImageOptimizationResult.Failed(e.localizedMessage ?: "Unknown JPEG optimization error.")
         } finally {
             if (outputWriteAttempted && !outputCommitted) {
-                runCatching { contentResolver.delete(outputUri, null, null) }
+                cancellationAwareRunCatching { contentResolver.delete(outputUri, null, null) }
             }
-            temporaries.forEach { runCatching { it.delete() } }
+            temporaries.forEach { cancellationAwareRunCatching { it.delete() } }
         }
     }
 
@@ -155,7 +155,7 @@ class JpegLosslessOptimizer @Inject constructor(
             input.readFully(header)
             header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte() && header[2] == 0xFF.toByte()
         }
-    } catch (_: Exception) {
+    } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
         false
     }
 
@@ -170,7 +170,7 @@ class JpegLosslessOptimizer @Inject constructor(
             ExifInterface.TAG_ORIENTATION,
             ExifInterface.ORIENTATION_UNDEFINED
         )
-    } catch (_: Exception) {
+    } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
         ExifInterface.ORIENTATION_UNDEFINED
     }
 
@@ -184,7 +184,7 @@ class JpegLosslessOptimizer @Inject constructor(
         }
 
     private fun ensureJpegOutputTarget(uri: Uri): String? {
-        val mimeType = runCatching { contentResolver.getType(uri) }.getOrNull()
+        val mimeType = cancellationAwareRunCatching { contentResolver.getType(uri) }.getOrNull()
         if (mimeType != null && mimeType !in setOf("image/jpeg", "image/jpg", "application/octet-stream")) {
             return "The output destination is not identified as JPEG. Choose a .jpg or .jpeg destination."
         }
@@ -198,7 +198,7 @@ class JpegLosslessOptimizer @Inject constructor(
     }
 
     private fun isOutputTargetEmpty(uri: Uri): Boolean? {
-        val reportedSize = runCatching {
+        val reportedSize = cancellationAwareRunCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val index = cursor.getColumnIndex(OpenableColumns.SIZE)
@@ -210,12 +210,12 @@ class JpegLosslessOptimizer @Inject constructor(
         return try {
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { it.read() == -1 }
-        } catch (_: Exception) {
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: Exception) {
             null
         }
     }
 
-    private fun queryDisplayName(uri: Uri): String? = runCatching {
+    private fun queryDisplayName(uri: Uri): String? = cancellationAwareRunCatching {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null
         }
