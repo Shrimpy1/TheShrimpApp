@@ -24,4 +24,15 @@ class ShrimpTopLevelDestinationTest {
         assertEquals("image_optimizer", ShrimpTopLevelDestination.ImageOptimizer.route)
         assertEquals("files", ShrimpTopLevelDestination.Files.route)
     }
+
+    @Test
+    fun fromRoute_mapsRoutesToTopLevelDestinations() {
+        assertEquals(ShrimpTopLevelDestination.Home, ShrimpTopLevelDestination.fromRoute("home"))
+        assertEquals(ShrimpTopLevelDestination.ImageOptimizer, ShrimpTopLevelDestination.fromRoute("image_optimizer"))
+        assertEquals(ShrimpTopLevelDestination.ImageOptimizer, ShrimpTopLevelDestination.fromRoute("image_optimizer_output"))
+        assertEquals(ShrimpTopLevelDestination.ImageOptimizer, ShrimpTopLevelDestination.fromRoute("image_optimizer_processing"))
+        assertEquals(ShrimpTopLevelDestination.ImageOptimizer, ShrimpTopLevelDestination.fromRoute("image_optimizer_result"))
+        assertEquals(ShrimpTopLevelDestination.Files, ShrimpTopLevelDestination.fromRoute("files"))
+        assertEquals(ShrimpTopLevelDestination.Home, ShrimpTopLevelDestination.fromRoute("unknown_route"))
+    }
 }

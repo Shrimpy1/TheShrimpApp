@@ -427,13 +427,13 @@ result of a batch.
 
 Tasks:
 
-- [ ] Record original bytes and actual output bytes for each successful image, plus whether it was
+- [x] Record original bytes and actual output bytes for each successful image, plus whether it was
   losslessly optimized, reduced in size, unchanged/no savings, skipped, or failed.
-- [ ] Calculate per-image byte difference and percentage change.
-- [ ] Calculate aggregate input/output totals using only successfully processed files.
-- [ ] Handle cases where output is larger than input and avoid misleading savings claims.
-- [ ] Show successful/failed counts, output dimensions/formats, and actionable error summaries.
-- [ ] Provide an Android-supported way to open, share, or locate outputs where available.
+- [x] Calculate per-image byte difference and percentage change.
+- [x] Calculate aggregate input/output totals using only successfully processed files.
+- [x] Handle cases where output is larger than input and avoid misleading savings claims.
+- [x] Show successful/failed counts, output dimensions/formats, and actionable error summaries.
+- [x] Provide an Android-supported way to open, share, or locate outputs where available.
 
 Acceptance criteria:
 
@@ -638,7 +638,7 @@ unless a dependency clearly allows parallel work.
 8. [x] **Size-reduction processing:** US-007 — resize/re-encode only in explicit Resize & Convert mode.
 9. [ ] **Output:** US-008 — choose destination and safely write output.
 10. [x] **Batch engine:** US-009 — bounded parallel background processing, persistence, progress, cancellation, per-file status.
-11. [ ] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.
+11. [x] **Results:** US-010 — accurate file sizes and mode-aware aggregate summary.
 12. [ ] **Files screen:** US-011, then US-012 and US-013.
 13. [ ] **Preferences and polish:** US-014, US-015.
 14. [ ] **Hardening and local release:** EN-004, EN-005, EN-006.

@@ -33,6 +33,7 @@ sealed class ShrimpTopLevelDestination(
     ) {
         const val OUTPUT_ROUTE = "image_optimizer_output"
         const val PROCESSING_ROUTE = "image_optimizer_processing"
+        const val RESULT_ROUTE = "image_optimizer_result"
     }
 
     object Files : ShrimpTopLevelDestination(
@@ -51,7 +52,9 @@ sealed class ShrimpTopLevelDestination(
 
         fun fromRoute(route: String?): ShrimpTopLevelDestination {
             return when (route) {
-                ImageOptimizer.OUTPUT_ROUTE, ImageOptimizer.PROCESSING_ROUTE -> ImageOptimizer
+                ImageOptimizer.OUTPUT_ROUTE,
+                ImageOptimizer.PROCESSING_ROUTE,
+                ImageOptimizer.RESULT_ROUTE -> ImageOptimizer
                 else -> ALL.find { it.route == route } ?: Home
             }
         }

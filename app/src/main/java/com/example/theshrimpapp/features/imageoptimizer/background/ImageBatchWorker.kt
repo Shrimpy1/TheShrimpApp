@@ -185,8 +185,12 @@ class ImageBatchWorker @AssistedInject constructor(
             Intent(applicationContext, CancelBatchReceiver::class.java).putExtra("jobId", jobId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val openIntent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "image_optimizer_processing")
+        }
         val open = PendingIntent.getActivity(
-            applicationContext, 0, Intent(applicationContext, MainActivity::class.java),
+            applicationContext, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val completed = items.count { it.terminal && it.state != "CANCELLED" }
@@ -207,9 +211,9 @@ class ImageBatchWorker @AssistedInject constructor(
         val manager = applicationContext.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(
-                "image-batches",
-                "Image processing",
-                NotificationManager.IMPORTANCE_DEFAULT
+                "image-batch-completions",
+                "Image processing completions",
+                NotificationManager.IMPORTANCE_HIGH
             )
         )
         val items = dao.items(jobId)
@@ -226,23 +230,30 @@ class ImageBatchWorker @AssistedInject constructor(
             else "Batch processing complete" to "$saved saved, $unchanged unchanged, $failed failed."
         }
 
+        val openIntent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "image_optimizer_result")
+        }
+
         val open = PendingIntent.getActivity(
             applicationContext,
-            0,
-            Intent(applicationContext, MainActivity::class.java),
+            1,
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(applicationContext, "image-batches")
+        val notification = NotificationCompat.Builder(applicationContext, "image-batch-completions")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
             .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setOngoing(false)
             .setAutoCancel(true)
             .setContentIntent(open)
             .build()
 
-        val notificationId = (jobId.hashCode() and Int.MAX_VALUE).coerceAtLeast(1)
-        manager.notify(notificationId, notification)
+        val baseId = (jobId.hashCode() and Int.MAX_VALUE).coerceAtLeast(1)
+        manager.notify(baseId + 100000, notification)
     }
 }

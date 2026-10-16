@@ -113,7 +113,19 @@ class ImageOptimizerViewModel @Inject constructor(
                                 .map(::image) else emptyList(), results
                     )
                     _uiState.update { current ->
+                        val wasProcessing = current.isProcessing
+                        val justFinished = wasProcessing && !progress.isActive
+                        val initialLoadOfCompleted = current.batchJobId == null && !progress.isActive
+                        val shouldWipeSelection = justFinished || initialLoadOfCompleted
+
                         val restoreJob = current.batchJobId == null || progress.isActive
+                        val isDismissed = current.dismissedBatchId == job.id
+                        val showPrevious = if (progress.isActive) {
+                            false
+                        } else {
+                            if (isDismissed) false else (current.showPreviousBatch || justFinished || initialLoadOfCompleted)
+                        }
+
                         val resolvedSourceFolderName = when {
                             job.sourceFolderName != null -> job.sourceFolderName
                             current.selectedFolderName != null && current.selectedFolderUri == job.sourceTree?.let(
@@ -152,10 +164,17 @@ class ImageOptimizerViewModel @Inject constructor(
                         current.copy(
                             batch = progress, batchJobId = job.id,
                             isProcessing = progress.isActive,
-                            selectedImages = if (current.batchJobId == null || progress.isActive) items.map(
-                                ::image
-                            ) else current.selectedImages,
-                            selectedImagesCount = if (current.batchJobId == null || progress.isActive) items.size else current.selectedImagesCount,
+                            showPreviousBatch = showPrevious,
+                            selectedImages = when {
+                                progress.isActive -> items.map(::image)
+                                shouldWipeSelection -> emptyList()
+                                else -> current.selectedImages
+                            },
+                            selectedImagesCount = when {
+                                progress.isActive -> items.size
+                                shouldWipeSelection -> 0
+                                else -> current.selectedImagesCount
+                            },
                             concurrency = job.concurrency,
                             processingMode = if (restoreJob) job.options().processingMode else current.processingMode,
                             maxDimension = if (restoreJob) job.dimension else current.maxDimension,
@@ -166,8 +185,8 @@ class ImageOptimizerViewModel @Inject constructor(
                             preserveMetadata = if (restoreJob) job.preserveMetadata else current.preserveMetadata,
                             outputFolderUri = if (restoreJob) job.outputTree?.let(Uri::parse) else current.outputFolderUri,
                             outputFolderName = if (restoreJob && job.outputTree != null) resolvedOutputFolderName else current.outputFolderName,
-                            selectedFolderUri = if (restoreJob) job.sourceTree?.let(Uri::parse) else current.selectedFolderUri,
-                            selectedFolderName = if (restoreJob && job.sourceTree != null) resolvedSourceFolderName else current.selectedFolderName,
+                            selectedFolderUri = if (shouldWipeSelection) null else if (restoreJob) job.sourceTree?.let(Uri::parse) else current.selectedFolderUri,
+                            selectedFolderName = if (shouldWipeSelection) null else if (restoreJob && job.sourceTree != null) resolvedSourceFolderName else current.selectedFolderName,
                             jpegBackgroundColor = if (restoreJob) JpegBackgroundColor.entries.firstOrNull {
                                 it.color.value.toLong() == job.background
                             } ?: JpegBackgroundColor.WHITE else current.jpegBackgroundColor,
@@ -219,7 +238,10 @@ class ImageOptimizerViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isLoading = true,
-                statusMessage = "Preparing background batch..."
+                statusMessage = "Preparing background batch...",
+                showPreviousBatch = false,
+                dismissedBatchId = null,
+                batch = BatchProgress(status = BatchStatus.QUEUED, totalCount = state.selectedImages.size)
             )
         }
         viewModelScope.launch {
@@ -246,6 +268,20 @@ class ImageOptimizerViewModel @Inject constructor(
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
             }
+        }
+    }
+
+    fun clearFinishedBatch() {
+        _uiState.update {
+            it.copy(
+                showPreviousBatch = false,
+                dismissedBatchId = it.batchJobId ?: it.dismissedBatchId,
+                batch = BatchProgress(),
+                batchJobId = null,
+                selectedImages = emptyList(),
+                selectedImagesCount = 0,
+                statusMessage = "Ready to select images"
+            )
         }
     }
 

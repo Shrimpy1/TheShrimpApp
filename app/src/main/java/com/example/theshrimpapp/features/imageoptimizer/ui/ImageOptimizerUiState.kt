@@ -34,6 +34,8 @@ data class ImageOptimizerUiState(
     val batchJobId: String? = null,
     val concurrency: Int = 4,
     val batch: BatchProgress<ImageItem, SaveImageResult> = BatchProgress(),
+    val showPreviousBatch: Boolean = true,
+    val dismissedBatchId: String? = null,
     val isLoading: Boolean = false,
     val statusMessage: String = "Ready to select images or folder"
 )

@@ -10,12 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,12 +31,19 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
 
 @Composable
 fun ProcessingScreen(
-    onBackClick: () -> Unit,
+    onNavigateToResult: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val batch = uiState.batch
+
+    // Automatically redirect to ResultScreen when batch completes/cancels/fails while on ProcessingScreen
+    LaunchedEffect(uiState.isProcessing, batch.status) {
+        if (!uiState.isProcessing && batch.status != BatchStatus.IDLE && batch.status != BatchStatus.QUEUED) {
+            onNavigateToResult()
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
@@ -76,10 +80,10 @@ fun ProcessingScreen(
                         }
                     } else {
                         Button(
-                            onClick = onBackClick,
+                            onClick = onNavigateToResult,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Done")
+                            Text("View Results")
                         }
                     }
                 }
@@ -94,18 +98,11 @@ fun ProcessingScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Row with Back Arrow
+            // Header Row without return button
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
                 Text(
                     text = "Batch Processing",
                     style = MaterialTheme.typography.titleLarge
@@ -161,7 +158,7 @@ fun ProcessingScreen(
             // Per-item Results List
             if (batch.results.isNotEmpty()) {
                 Text(
-                    text = "Results",
+                    text = "Live Progress",
                     style = MaterialTheme.typography.titleMedium
                 )
 

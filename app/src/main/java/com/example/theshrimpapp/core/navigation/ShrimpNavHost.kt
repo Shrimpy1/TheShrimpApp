@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +37,7 @@ import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerViewModel
 import com.example.theshrimpapp.features.imageoptimizer.ui.OutputSelectionScreen
 import com.example.theshrimpapp.features.imageoptimizer.ui.ProcessingScreen
+import com.example.theshrimpapp.features.imageoptimizer.ui.ResultScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,6 +45,8 @@ fun ShrimpNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     startDestination: String = ShrimpTopLevelDestination.Home.route,
+    pendingRoute: String? = null,
+    onRouteConsumed: () -> Unit = {}
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -51,6 +55,15 @@ fun ShrimpNavHost(
 
     val currentDestination = ShrimpTopLevelDestination.fromRoute(currentRoute)
     val title = currentDestination.title
+
+    LaunchedEffect(pendingRoute) {
+        if (pendingRoute != null) {
+            navController.navigate(pendingRoute) {
+                launchSingleTop = true
+            }
+            onRouteConsumed()
+        }
+    }
 
     val onNavigateToDestination: (ShrimpTopLevelDestination) -> Unit = { destination ->
         scope.launch { drawerState.close() }
@@ -134,6 +147,9 @@ fun ShrimpNavHost(
                         },
                         onNavigateToProcessing = {
                             navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.PROCESSING_ROUTE)
+                        },
+                        onNavigateToResult = {
+                            navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.RESULT_ROUTE)
                         }
                     )
                 }
@@ -160,8 +176,28 @@ fun ShrimpNavHost(
                     }
                     val viewModel: ImageOptimizerViewModel = hiltViewModel(parentEntry)
                     ProcessingScreen(
+                        onNavigateToResult = {
+                            navController.navigate(ShrimpTopLevelDestination.ImageOptimizer.RESULT_ROUTE) {
+                                popUpTo(ShrimpTopLevelDestination.ImageOptimizer.PROCESSING_ROUTE) {
+                                    inclusive = true
+                                }
+                            }
+                        },
+                        viewModel = viewModel
+                    )
+                }
+
+                composable(ShrimpTopLevelDestination.ImageOptimizer.RESULT_ROUTE) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
+                        navController.getBackStackEntry(ShrimpTopLevelDestination.ImageOptimizer.route)
+                    }
+                    val viewModel: ImageOptimizerViewModel = hiltViewModel(parentEntry)
+                    ResultScreen(
                         onBackClick = {
-                            navController.popBackStack()
+                            navController.popBackStack(
+                                route = ShrimpTopLevelDestination.ImageOptimizer.route,
+                                inclusive = false
+                            )
                         },
                         viewModel = viewModel
                     )

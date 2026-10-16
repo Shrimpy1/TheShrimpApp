@@ -42,12 +42,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
+import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
 import java.util.Locale
 
 @Composable
 fun ImageOptimizerScreen(
     onNavigateToOutput: () -> Unit,
     onNavigateToProcessing: () -> Unit = {},
+    onNavigateToResult: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
@@ -169,9 +172,94 @@ fun ImageOptimizerScreen(
                         )
                     }
                 }
+            } else if (uiState.showPreviousBatch && (uiState.batch.results.isNotEmpty() ||
+                    uiState.batch.status in listOf(BatchStatus.COMPLETED, BatchStatus.CANCELLED, BatchStatus.FAILED))
+            ) {
+                // Previous Batch Result Card + "Make a New Batch" button below it
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Previous Batch Result",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            val (statusText, statusBg) = when (uiState.batch.status) {
+                                BatchStatus.COMPLETED -> "Completed" to MaterialTheme.colorScheme.primaryContainer
+                                BatchStatus.CANCELLED -> "Cancelled" to MaterialTheme.colorScheme.secondaryContainer
+                                BatchStatus.FAILED -> "Failed" to MaterialTheme.colorScheme.errorContainer
+                                else -> "Finished" to MaterialTheme.colorScheme.surfaceVariant
+                            }
+                            Surface(
+                                color = statusBg,
+                                shape = CircleShape
+                            ) {
+                                Text(
+                                    text = statusText,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        val savedCount = uiState.batch.results.count { it.result is SaveImageResult.Saved }
+                        val unchangedCount = uiState.batch.results.count { it.result is SaveImageResult.Unchanged }
+                        val failedCount = uiState.batch.results.count { it.result is SaveImageResult.Failed }
+
+                        Text(
+                            text = "$savedCount saved · $unchangedCount unchanged · $failedCount failed (${uiState.batch.totalCount} total)",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        val savedDetails = uiState.batch.results.mapNotNull { (it.result as? SaveImageResult.Saved)?.details }
+                        if (savedDetails.isNotEmpty()) {
+                            val origTotal = savedDetails.sumOf { it.originalSizeBytes }
+                            val outTotal = savedDetails.sumOf { it.outputSizeBytes }
+                            val netSaved = origTotal - outTotal
+                            val pct = if (origTotal > 0) (netSaved.toDouble() * 100.0) / origTotal.toDouble() else 0.0
+
+                            val summaryStr = if (netSaved > 0) {
+                                "Saved ${formatFileSize(netSaved)} (${String.format(Locale.US, "%.1f", pct)}% size reduction)"
+                            } else if (netSaved < 0) {
+                                "Output size increased by ${formatFileSize(-netSaved)} (+${String.format(Locale.US, "%.1f", -pct)}%)"
+                            } else {
+                                "No size change across saved files"
+                            }
+
+                            Text(
+                                text = summaryStr,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (netSaved >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+
+                        Button(
+                            onClick = onNavigateToResult,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "View Full Results")
+                        }
+
+                        Button(
+                            onClick = { viewModel.clearFinishedBatch() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "Make a New Batch")
+                        }
+                    }
+                }
             } else {
-                // Normal Selection Mode
-                // Action Buttons Row (Select Images & Select Folder)
+                // Normal Selection Mode - Make a New Batch (File Selection)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
