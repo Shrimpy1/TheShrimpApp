@@ -5,6 +5,8 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.optimizedOutputName
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,15 +34,34 @@ class PersistentImagePublisher @Inject constructor(
         withContext(Dispatchers.IO) {
             if (item.state != "PREPARED" || !candidate.exists() || candidate.length() != item.outputBytes) return@withContext null
             try {
+                if (job.destinationMode == OutputDestinationMode.REPLACE_ORIGINAL.name) {
+                    val targetUri = item.originalUri.toUri()
+                    val expected = candidate.inputStream().use { fingerprint(it) }
+                    val actual = resolver.openInputStream(targetUri)?.use { fingerprint(it) }
+                        ?: return@withContext null
+                    if (actual.first == expected.first && actual.second.contentEquals(expected.second)) {
+                        val saved = item.copy(
+                            state = "SAVED",
+                            outputUri = targetUri.toString(),
+                            outputName = item.name ?: "original",
+                            outputBytes = actual.first
+                        )
+                        withContext(NonCancellable) { dao.updateItem(saved) }
+                        return@withContext saved
+                    }
+                    return@withContext null
+                }
                 val known =
                     item.outputUri?.let { DocumentFile.fromSingleUri(context, it.toUri()) }
                 var directory = DocumentFile.fromTreeUri(
                     context,
                     (job.outputTree ?: job.sourceTree ?: return@withContext null).toUri()
                 )
-                if (job.outputTree == null) directory = directory?.findFile("Optimized")
+                if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name && job.outputTree == null) {
+                    directory = directory?.findFile("Optimized")
+                }
                 val document =
-                    known?.takeIf { it.exists() } ?: directory?.findFile(reservedName(job, item))
+                    known?.takeIf { it.exists() } ?: directory?.findFile(item.outputName ?: reservedName(job, item))
                     ?: return@withContext null
                 if (sameDocument(document.uri, item.originalUri.toUri())) return@withContext null
                 val expected = candidate.inputStream().use { fingerprint(it) }
@@ -69,6 +90,74 @@ class PersistentImagePublisher @Inject constructor(
         withContext(Dispatchers.IO) {
             check(candidate.exists() && candidate.length() == item.outputBytes && item.outputBytes > 0) { "Prepared candidate is missing or invalid." }
             val expected = candidate.inputStream().use { fingerprint(it) }
+
+            if (job.destinationMode == OutputDestinationMode.REPLACE_ORIGINAL.name) {
+                val targetUri = item.originalUri.toUri()
+                val ext = item.details(job.options().processingMode).format.extension
+                val mime = when (ext) {
+                    ".jpg" -> "image/jpeg"
+                    ".png" -> "image/png"
+                    else -> "image/webp"
+                }
+
+                val origName = item.name ?: "image"
+                val stem = origName.substringBeforeLast('.')
+                val targetName = "$stem$ext"
+                val isSameFormat = origName.equals(targetName, ignoreCase = true)
+
+                val checkpoint = item.copy(
+                    outputUri = targetUri.toString(),
+                    outputName = origName
+                )
+                withContext(NonCancellable) { dao.updateItem(checkpoint) }
+
+                return@withContext withContext(NonCancellable) {
+                    try {
+                        val treeUriStr = job.sourceTree ?: job.outputTree
+                        val parentDir = treeUriStr?.let { DocumentFile.fromTreeUri(context, it.toUri()) }
+                        val originalDoc = parentDir?.findFile(origName) ?: DocumentFile.fromSingleUri(context, targetUri)
+
+                        val finalDoc: DocumentFile
+                        if (parentDir != null && parentDir.canWrite()) {
+                            if (!isSameFormat && originalDoc != null && originalDoc.exists()) {
+                                originalDoc.delete()
+                            }
+                            finalDoc = if (!isSameFormat) {
+                                parentDir.createFile(mime, targetName)
+                                    ?: throw IOException("Could not create $targetName in source folder.")
+                            } else {
+                                originalDoc ?: throw IOException("Original file unavailable.")
+                            }
+                        } else {
+                            finalDoc = originalDoc ?: DocumentFile.fromSingleUri(context, targetUri)
+                                ?: throw IOException("Original file is unavailable.")
+                        }
+
+                        val outStream = resolver.openOutputStream(finalDoc.uri, "wt")
+                            ?: throw IOException("Original file is read-only or inaccessible.")
+                        outStream.use { out ->
+                            candidate.inputStream().use { it.copyTo(out) }
+                        }
+                        val actual = resolver.openInputStream(finalDoc.uri)?.use { fingerprint(it) }
+                            ?: throw IOException("Cannot verify updated original file.")
+                        check(actual.first == expected.first && actual.second.contentEquals(expected.second)) {
+                            "Output verification failed after replacing original file."
+                        }
+
+                        checkpoint.copy(
+                            state = "SAVED",
+                            outputUri = finalDoc.uri.toString(),
+                            outputName = finalDoc.name ?: targetName,
+                            outputBytes = actual.first
+                        ).also { dao.updateItem(it) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        throw IOException("Could not replace original: ${e.localizedMessage}", e)
+                    }
+                }
+            }
+
             var checkpoint = item
             val output = creation.withLock {
                 val tree = (job.outputTree ?: job.sourceTree
@@ -76,11 +165,14 @@ class PersistentImagePublisher @Inject constructor(
                 var directory = DocumentFile.fromTreeUri(context, tree)
                     ?: throw IOException("Output folder unavailable.")
                 check(directory.isDirectory && directory.canRead() && directory.canWrite()) { "Output access revoked; select an accessible folder for a new batch." }
-                if (job.outputTree == null) directory =
-                    directory.findFile("Optimized") ?: directory.createDirectory("Optimized")
+                if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name && job.outputTree == null) {
+                    directory = directory.findFile("Optimized") ?: directory.createDirectory("Optimized")
                             ?: throw IOException("Cannot create Optimized folder.")
+                }
                 val extension = item.details(job.options().processingMode).format.extension
-                val name = reservedName(job, item)
+                val existingDocs = directory.listFiles()
+                val existingNames = existingDocs.mapNotNull { it.name }.toSet()
+                val name = optimizedOutputName(item.name, extension, existingNames)
                 val mime = when (extension) {
                     ".jpg" -> "image/jpeg"; ".png" -> "image/png"; else -> "image/webp"
                 }
@@ -88,7 +180,7 @@ class PersistentImagePublisher @Inject constructor(
                     item.outputUri?.let { DocumentFile.fromSingleUri(context, it.toUri()) }
                         ?.takeIf { it.exists() } ?: directory.findFile(name)
                 val before =
-                    if (existing == null) directory.listFiles().map { it.uri } else emptyList()
+                    if (existing == null) existingDocs.map { it.uri } else emptyList()
                 val document = existing ?: directory.createFile(mime, name)
                 ?: throw IOException("Cannot create output document.")
                 check(
@@ -184,9 +276,8 @@ class PersistentImagePublisher @Inject constructor(
     }
 
     private fun reservedName(job: BatchJob, item: BatchItem): String {
-        val stem = item.name.orEmpty().substringAfterLast('/').substringAfterLast('\\')
-            .substringBeforeLast('.').ifBlank { "image" }.take(80)
-        return "${stem}_optimized_${job.id}_${item.position}${item.details(job.options().processingMode).format.extension}"
+        val extension = item.details(job.options().processingMode).format.extension
+        return optimizedOutputName(item.name, extension, emptySet())
     }
 
     private fun sameDocument(first: Uri, second: Uri): Boolean {

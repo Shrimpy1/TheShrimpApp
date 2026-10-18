@@ -18,4 +18,12 @@ class OutputNamingTest {
         assertEquals("image_optimized.png", optimizedOutputName(null, ".png", emptySet()))
         assertEquals("photo_optimized.png", optimizedOutputName("dir\\other/photo", ".png", emptySet()))
     }
+
+    @Test fun producesShortOptimizedFilenamesWithoutUuidOrLongSuffix() {
+        val name = optimizedOutputName("my_photo.jpg", ".webp", emptySet())
+        assertEquals("my_photo_optimized.webp", name)
+        // Verify length of the added suffix "_optimized" is exactly 10 characters before the extension
+        val suffix = name.substringAfter("my_photo").substringBefore(".webp")
+        assertEquals("_optimized", suffix)
+    }
 }

@@ -40,6 +40,11 @@ class ImageOptimizerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ImageOptimizerUiState())
     val uiState: StateFlow<ImageOptimizerUiState> = _uiState.asStateFlow()
 
+    fun updateDestinationMode(mode: com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { it.copy(destinationMode = mode) }
+    }
+
     fun selectOutputFolder(uri: Uri) {
         if (_uiState.value.isProcessing || _uiState.value.isLoading) return
         _uiState.update { it.copy(isLoading = true) }
@@ -49,6 +54,7 @@ class ImageOptimizerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         outputFolderUri = folder.uri, outputFolderName = folder.name,
+                        destinationMode = com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.CUSTOM_FOLDER,
                         statusMessage = "Output folder: ${folder.name}"
                     )
                 }
@@ -68,7 +74,12 @@ class ImageOptimizerViewModel @Inject constructor(
 
     fun useDefaultOutputFolder() {
         if (!_uiState.value.isProcessing) {
-            _uiState.update { it.copy(outputFolderUri = null, outputFolderName = null) }
+            _uiState.update {
+                it.copy(
+                    outputFolderUri = null, outputFolderName = null,
+                    destinationMode = com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.SUBFOLDER
+                )
+            }
         }
     }
 
@@ -176,6 +187,11 @@ class ImageOptimizerViewModel @Inject constructor(
                                 else -> current.selectedImagesCount
                             },
                             concurrency = job.concurrency,
+                            destinationMode = if (restoreJob) try {
+                                com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.valueOf(job.destinationMode)
+                            } catch (_: Exception) {
+                                com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.SUBFOLDER
+                            } else current.destinationMode,
                             processingMode = if (restoreJob) job.options().processingMode else current.processingMode,
                             maxDimension = if (restoreJob) job.dimension else current.maxDimension,
                             maxDimensionInput = if (restoreJob) job.dimension.toString() else current.maxDimensionInput,
@@ -259,7 +275,8 @@ class ImageOptimizerViewModel @Inject constructor(
                     options = options,
                     concurrency = state.concurrency,
                     sourceFolderName = state.selectedFolderName,
-                    outputFolderName = state.outputFolderName
+                    outputFolderName = state.outputFolderName,
+                    destinationMode = state.destinationMode
                 )
             } catch (e: CancellationException) {
                 throw e

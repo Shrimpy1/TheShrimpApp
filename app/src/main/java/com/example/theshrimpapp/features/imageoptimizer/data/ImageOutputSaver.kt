@@ -58,7 +58,8 @@ class ImageOutputSaver @Inject constructor(
         sourceName: String?,
         outputTree: Uri?,
         sourceTree: Uri?,
-        options: ImageProcessingOptions
+        options: ImageProcessingOptions,
+        destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER
     ): SaveImageResult = withContext(Dispatchers.IO) {
         var candidate: File? = null
         var created: DocumentFile? = null
@@ -77,47 +78,99 @@ class ImageOutputSaver @Inject constructor(
                     check(size > 0 && size == processed.outputSizeBytes) { "Invalid processed output." }
                     check(options.processingMode != ProcessingMode.LOSSLESS_OPTIMIZE ||
                         size < processed.originalSizeBytes) { "No lossless savings. Output was not saved." }
-                    val directory = if (outputTree != null) folder(outputTree) else {
-                        val source = folder(sourceTree ?: throw IOException("Choose an output folder first."))
-                        val child = source.findFile("Optimized") ?: source.createDirectory("Optimized")
-                            ?: throw IOException("Cannot create Optimized folder. Choose another output location.")
-                        if (!child.isDirectory || !child.canWrite() || !child.canRead()) {
-                            throw IOException("Optimized folder is not writable. Choose another output location.")
+
+                    if (destinationMode == OutputDestinationMode.REPLACE_ORIGINAL) {
+                        val ext = processed.format.extension
+                        val mime = when (processed.format) {
+                            OutputFormat.JPEG -> "image/jpeg"
+                            OutputFormat.PNG -> "image/png"
+                            else -> "image/webp"
                         }
-                        child
+                        val origName = sourceName ?: "image"
+                        val stem = origName.substringBeforeLast('.')
+                        val targetName = "$stem$ext"
+                        val isSameFormat = origName.equals(targetName, ignoreCase = true)
+
+                        val sourceDir = sourceTree?.let { folder(it) }
+                        val originalDoc = sourceDir?.findFile(origName) ?: DocumentFile.fromSingleUri(context, input)
+
+                        val finalDoc: DocumentFile
+                        if (sourceDir != null && sourceDir.canWrite()) {
+                            if (!isSameFormat && originalDoc != null && originalDoc.exists()) {
+                                originalDoc.delete()
+                            }
+                            finalDoc = if (!isSameFormat) {
+                                sourceDir.createFile(mime, targetName)
+                                    ?: throw IOException("Could not create $targetName in source folder.")
+                            } else {
+                                originalDoc ?: throw IOException("Original file unavailable.")
+                            }
+                        } else {
+                            finalDoc = originalDoc ?: DocumentFile.fromSingleUri(context, input)
+                                ?: throw IOException("Original file is unavailable.")
+                        }
+
+                        val outStream = resolver.openOutputStream(finalDoc.uri, "wt")
+                            ?: throw IOException("Original file is read-only or inaccessible.")
+                        outStream.use { stream ->
+                            candidate.inputStream().use { it.copyTo(stream) }
+                        }
+                        val expectedDigest = candidate.inputStream().use { digest(it) }
+                        val actual = resolver.openInputStream(finalDoc.uri)?.use { digest(it) }
+                            ?: throw IOException("Cannot verify updated original file.")
+                        check(actual.first == size && actual.second.contentEquals(expectedDigest.second)) {
+                            "Saved output did not match the processed image."
+                        }
+                        committed = true
+                        SaveImageResult.Saved(finalDoc.uri, finalDoc.name ?: targetName, processed.copy(
+                            outputSizeBytes = actual.first,
+                            bytesSaved = processed.originalSizeBytes - actual.first,
+                            percentageReduction = if (processed.originalSizeBytes > 0)
+                                100f * (processed.originalSizeBytes - actual.first) / processed.originalSizeBytes else 0f
+                        ))
+                    } else {
+                        val directory = if (outputTree != null) folder(outputTree) else {
+                            val source = folder(sourceTree ?: throw IOException("Choose an output folder first."))
+                            val child = source.findFile("Optimized") ?: source.createDirectory("Optimized")
+                                ?: throw IOException("Cannot create Optimized folder. Choose another output location.")
+                            if (!child.isDirectory || !child.canWrite() || !child.canRead()) {
+                                throw IOException("Optimized folder is not writable. Choose another output location.")
+                            }
+                            child
+                        }
+                        val existing = directory.listFiles()
+                        val name = optimizedOutputName(sourceName, processed.format.extension,
+                            existing.mapNotNull { it.name }.toSet())
+                        val mime = when (processed.format) {
+                            OutputFormat.JPEG -> "image/jpeg"
+                            OutputFormat.PNG -> "image/png"
+                            else -> "image/webp"
+                        }
+                        val output = directory.createFile(mime, name)
+                            ?: throw IOException("Provider could not create output. Choose another location.")
+                        // Never open a provider-returned source or existing document for writing.
+                        check(!sameDocument(output.uri, input) && existing.none { sameDocument(it.uri, output.uri) }) {
+                            "Provider returned an existing document. Nothing was written."
+                        }
+                        created = output
+                        resolver.openOutputStream(output.uri, "wt")?.use { stream ->
+                            candidate.inputStream().use { it.copyTo(stream) }
+                        } ?: throw IOException("Provider could not open output for writing.")
+                        coroutineContext.ensureActive()
+                        val expectedDigest = candidate.inputStream().use { stream -> digest(stream) }
+                        val actual = resolver.openInputStream(output.uri)?.use { stream -> digest(stream) }
+                            ?: throw IOException("Cannot verify saved output.")
+                        check(actual.first == size && actual.second.contentEquals(expectedDigest.second)) {
+                            "Saved output did not match the processed image."
+                        }
+                        committed = true
+                        SaveImageResult.Saved(output.uri, output.name ?: name, processed.copy(
+                            outputSizeBytes = actual.first,
+                            bytesSaved = processed.originalSizeBytes - actual.first,
+                            percentageReduction = if (processed.originalSizeBytes > 0)
+                                100f * (processed.originalSizeBytes - actual.first) / processed.originalSizeBytes else 0f
+                        ))
                     }
-                    val existing = directory.listFiles()
-                    val name = optimizedOutputName(sourceName, processed.format.extension,
-                        existing.mapNotNull { it.name }.toSet())
-                    val mime = when (processed.format) {
-                        OutputFormat.JPEG -> "image/jpeg"
-                        OutputFormat.PNG -> "image/png"
-                        else -> "image/webp"
-                    }
-                    val output = directory.createFile(mime, name)
-                        ?: throw IOException("Provider could not create output. Choose another location.")
-                    // Never open a provider-returned source or existing document for writing.
-                    check(!sameDocument(output.uri, input) && existing.none { sameDocument(it.uri, output.uri) }) {
-                        "Provider returned an existing document. Nothing was written."
-                    }
-                    created = output
-                    resolver.openOutputStream(output.uri, "wt")?.use { stream ->
-                        candidate.inputStream().use { it.copyTo(stream) }
-                    } ?: throw IOException("Provider could not open output for writing.")
-                    coroutineContext.ensureActive()
-                    val expectedDigest = candidate.inputStream().use { stream -> digest(stream) }
-                    val actual = resolver.openInputStream(output.uri)?.use { stream -> digest(stream) }
-                        ?: throw IOException("Cannot verify saved output.")
-                    check(actual.first == size && actual.second.contentEquals(expectedDigest.second)) {
-                        "Saved output did not match the processed image."
-                    }
-                    committed = true
-                    SaveImageResult.Saved(output.uri, output.name ?: name, processed.copy(
-                        outputSizeBytes = actual.first,
-                        bytesSaved = processed.originalSizeBytes - actual.first,
-                        percentageReduction = if (processed.originalSizeBytes > 0)
-                            100f * (processed.originalSizeBytes - actual.first) / processed.originalSizeBytes else 0f
-                    ))
                 }
             }
         } catch (e: CancellationException) {

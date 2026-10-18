@@ -46,6 +46,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.MAX_BATCH_CONCURRENCY
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 
@@ -93,6 +94,10 @@ fun OutputSelectionScreen(
                             Text("View Batch Progress")
                         }
                     } else {
+                        val isDestinationValid = when (uiState.destinationMode) {
+                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> uiState.selectedFolderUri != null
+                            OutputDestinationMode.CUSTOM_FOLDER -> uiState.outputFolderUri != null
+                        }
                         Button(
                             onClick = {
                                 if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
@@ -110,7 +115,7 @@ fun OutputSelectionScreen(
                             enabled = !uiState.isLoading &&
                                     uiState.optionsError == null &&
                                     uiState.selectedImages.isNotEmpty() &&
-                                    (uiState.outputFolderUri != null || uiState.selectedFolderUri != null)
+                                    isDestinationValid
                         ) {
                             Text("Process ${uiState.selectedImages.size} image(s)")
                         }
@@ -159,42 +164,88 @@ fun OutputSelectionScreen(
                 }
             }
 
-            // Output Folder Card
+            // Save Output Location Card with 3 radio choices
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Save Output", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = uiState.outputFolderName ?: if (uiState.selectedFolderUri != null)
-                            "Optimized subfolder in ${uiState.selectedFolderName ?: "source folder"}"
-                        else "Choose an output folder to save selected images.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { outputPicker.launch(uiState.outputFolderUri) },
-                            enabled = !uiState.isProcessing && !uiState.isLoading
-                        ) {
-                            Text("Choose output folder")
+                    Text("Save Output Location", style = MaterialTheme.typography.titleMedium)
+
+                    OutputDestinationMode.entries.forEach { mode ->
+                        val isSelected = uiState.destinationMode == mode
+                        val isModeEnabled = !uiState.isProcessing && !uiState.isLoading && when (mode) {
+                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> uiState.selectedFolderUri != null
+                            else -> true
                         }
-                        if (uiState.selectedFolderUri != null && uiState.outputFolderUri != null) {
-                            OutlinedButton(
-                                onClick = viewModel::useDefaultOutputFolder,
-                                enabled = !uiState.isProcessing && !uiState.isLoading
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Use source's Optimized subfolder")
+                                RadioButton(
+                                    selected = isSelected,
+                                    enabled = isModeEnabled,
+                                    onClick = { viewModel.updateDestinationMode(mode) }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = mode.displayName,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    val description = when (mode) {
+                                        OutputDestinationMode.REPLACE_ORIGINAL ->
+                                            if (uiState.selectedFolderUri != null)
+                                                "Replaces original images directly in ${uiState.selectedFolderName ?: "source folder"}."
+                                            else
+                                                "Requires source folder selection (Photo Picker files are read-only)."
+                                        OutputDestinationMode.SUBFOLDER ->
+                                            if (uiState.selectedFolderUri != null)
+                                                "Saves to 'Optimized' subfolder in ${uiState.selectedFolderName ?: "source folder"}."
+                                            else
+                                                "Requires source folder selection."
+                                        OutputDestinationMode.CUSTOM_FOLDER ->
+                                            uiState.outputFolderName?.let { "Selected: $it" }
+                                                ?: "Choose a custom output folder."
+                                    }
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (mode == OutputDestinationMode.CUSTOM_FOLDER && isSelected) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 40.dp, top = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { outputPicker.launch(uiState.outputFolderUri) },
+                                        enabled = !uiState.isProcessing && !uiState.isLoading
+                                    ) {
+                                        Text(if (uiState.outputFolderUri != null) "Change custom folder" else "Select custom folder")
+                                    }
+                                }
                             }
                         }
                     }
-                    Text(
-                        text = uiState.statusMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+
+                    if (uiState.statusMessage.isNotEmpty()) {
+                        Text(
+                            text = uiState.statusMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (uiState.isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }

@@ -1,9 +1,25 @@
 package com.example.theshrimpapp.features.imageoptimizer.background
 
-import androidx.room.*
-import kotlinx.coroutines.flow.Flow
-import com.example.theshrimpapp.features.imageoptimizer.domain.*
 import androidx.compose.ui.graphics.Color
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Embedded
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Insert
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Relation
+import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.Update
+import com.example.theshrimpapp.features.imageoptimizer.domain.DEFAULT_BATCH_CONCURRENCY
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingResult
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "batch_jobs")
 data class BatchJob(
@@ -23,14 +39,24 @@ data class BatchJob(
     val quality: Int = 85,
     val background: Long = Color.White.value.toLong(),
     val preserveMetadata: Boolean = true,
+    val destinationMode: String = OutputDestinationMode.SUBFOLDER.name,
     val error: String? = null
 ) {
-    fun options() = ImageProcessingOptions(ProcessingMode.valueOf(mode), dimension, keepOriginal,
-        OutputFormat.valueOf(format), quality, Color(background.toULong()), preserveMetadata)
+    fun options() = ImageProcessingOptions(
+        ProcessingMode.valueOf(mode), dimension, keepOriginal,
+        OutputFormat.valueOf(format), quality, Color(background.toULong()), preserveMetadata
+    )
 }
 
-@Entity(tableName = "batch_items", primaryKeys = ["jobId", "position"],
-    foreignKeys = [ForeignKey(entity = BatchJob::class, parentColumns = ["id"], childColumns = ["jobId"], onDelete = ForeignKey.CASCADE)])
+@Entity(
+    tableName = "batch_items", primaryKeys = ["jobId", "position"],
+    foreignKeys = [ForeignKey(
+        entity = BatchJob::class,
+        parentColumns = ["id"],
+        childColumns = ["jobId"],
+        onDelete = ForeignKey.CASCADE
+    )]
+)
 data class BatchItem(
     val jobId: String, val position: Int,
     val inputUri: String, val name: String?,
@@ -45,32 +71,56 @@ data class BatchItem(
     val reason: String? = null
 ) {
     val terminal: Boolean get() = state in listOf("SAVED", "UNCHANGED", "FAILED", "CANCELLED")
-    fun details(mode: ProcessingMode) = ImageProcessingResult.Success(originalBytes, outputBytes,
+    fun details(mode: ProcessingMode) = ImageProcessingResult.Success(
+        originalBytes, outputBytes,
         OutputFormat.valueOf(requireNotNull(format)), width, height, originalBytes - outputBytes,
-        if (originalBytes > 0) 100f * (originalBytes - outputBytes) / originalBytes else 0f, mode)
-    fun prepared(details: ImageProcessingResult.Success) = copy(state = "PREPARED",
+        if (originalBytes > 0) 100f * (originalBytes - outputBytes) / originalBytes else 0f, mode
+    )
+
+    fun prepared(details: ImageProcessingResult.Success) = copy(
+        state = "PREPARED",
         originalBytes = details.originalSizeBytes, outputBytes = details.outputSizeBytes,
-        width = details.width, height = details.height, format = details.format.name)
+        width = details.width, height = details.height, format = details.format.name
+    )
 }
 
-data class StoredBatch(@Embedded val job: BatchJob,
-    @Relation(parentColumn = "id", entityColumn = "jobId") val items: List<BatchItem>)
+data class StoredBatch(
+    @Embedded val job: BatchJob,
+    @Relation(parentColumn = "id", entityColumn = "jobId") val items: List<BatchItem>
+)
 
 @Dao
 interface BatchDao {
-    @Insert suspend fun insertJob(job: BatchJob)
-    @Insert suspend fun insertItems(items: List<BatchItem>)
-    @Update suspend fun updateItem(item: BatchItem)
-    @Query("SELECT * FROM batch_jobs WHERE id = :id") suspend fun job(id: String): BatchJob?
-    @Query("SELECT * FROM batch_items WHERE jobId = :id ORDER BY position") suspend fun items(id: String): List<BatchItem>
-    @Transaction @Query("SELECT * FROM batch_jobs ORDER BY createdAt DESC LIMIT 1") fun latest(): Flow<StoredBatch?>
-    @Query("SELECT * FROM batch_jobs WHERE state IN ('QUEUED', 'PROCESSING', 'CANCELLING', 'INTERRUPTED')") suspend fun unfinished(): List<BatchJob>
-    @Query("UPDATE batch_jobs SET state = :state, error = :error WHERE id = :id") suspend fun status(id: String, state: String, error: String? = null)
-    @Query("UPDATE batch_jobs SET cancelRequested = 1, state = 'CANCELLING' WHERE id = :id AND state NOT IN ('COMPLETED', 'CANCELLED', 'FAILED')") suspend fun cancel(id: String)
-    @Query("UPDATE batch_items SET state = 'CANCELLED', reason = COALESCE(reason, 'Not processed: batch cancelled') WHERE jobId = :id AND state NOT IN ('SAVED', 'UNCHANGED', 'FAILED')") suspend fun cancelRemaining(id: String)
-    @Query("DELETE FROM batch_jobs WHERE id = :id") suspend fun deleteJob(id: String)
-    @Transaction suspend fun create(job: BatchJob, items: List<BatchItem>) { insertJob(job); insertItems(items) }
+    @Insert
+    suspend fun insertJob(job: BatchJob)
+    @Insert
+    suspend fun insertItems(items: List<BatchItem>)
+    @Update
+    suspend fun updateItem(item: BatchItem)
+    @Query("SELECT * FROM batch_jobs WHERE id = :id")
+    suspend fun job(id: String): BatchJob?
+    @Query("SELECT * FROM batch_items WHERE jobId = :id ORDER BY position")
+    suspend fun items(id: String): List<BatchItem>
+    @Transaction
+    @Query("SELECT * FROM batch_jobs ORDER BY createdAt DESC LIMIT 1")
+    fun latest(): Flow<StoredBatch?>
+    @Query("SELECT * FROM batch_jobs WHERE state IN ('QUEUED', 'PROCESSING', 'CANCELLING', 'INTERRUPTED')")
+    suspend fun unfinished(): List<BatchJob>
+    @Query("UPDATE batch_jobs SET state = :state, error = :error WHERE id = :id")
+    suspend fun status(id: String, state: String, error: String? = null)
+    @Query("UPDATE batch_jobs SET cancelRequested = 1, state = 'CANCELLING' WHERE id = :id AND state NOT IN ('COMPLETED', 'CANCELLED', 'FAILED')")
+    suspend fun cancel(id: String)
+    @Query("UPDATE batch_items SET state = 'CANCELLED', reason = COALESCE(reason, 'Not processed: batch cancelled') WHERE jobId = :id AND state NOT IN ('SAVED', 'UNCHANGED', 'FAILED')")
+    suspend fun cancelRemaining(id: String)
+    @Query("DELETE FROM batch_jobs WHERE id = :id")
+    suspend fun deleteJob(id: String)
+    @Transaction
+    suspend fun create(job: BatchJob, items: List<BatchItem>) {
+        insertJob(job); insertItems(items)
+    }
 }
 
-@Database(entities = [BatchJob::class, BatchItem::class], version = 2, exportSchema = false)
-abstract class BatchDatabase : RoomDatabase() { abstract fun batches(): BatchDao }
+@Database(entities = [BatchJob::class, BatchItem::class], version = 3, exportSchema = false)
+abstract class BatchDatabase : RoomDatabase() {
+    abstract fun batches(): BatchDao
+}

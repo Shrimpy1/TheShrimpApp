@@ -2,6 +2,7 @@ package com.example.theshrimpapp.features.imageoptimizer.ui
 
 import android.net.Uri
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
@@ -21,6 +22,7 @@ data class ImageOptimizerUiState(
     val selectedFolderName: String? = null,
     val outputFolderUri: Uri? = null,
     val outputFolderName: String? = null,
+    val destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER,
     val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
     val maxDimension: Int = 1920,
     val keepOriginalSize: Boolean = false,

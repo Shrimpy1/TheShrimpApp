@@ -64,19 +64,34 @@ class BatchRepository @Inject constructor(
     }
 
     suspend fun submit(inputs: List<BatchInput>, output: Uri?, source: Uri?, options: ImageProcessingOptions,
-        concurrency: Int, sourceFolderName: String? = null, outputFolderName: String? = null): String = withContext(Dispatchers.IO) {
+        concurrency: Int, sourceFolderName: String? = null, outputFolderName: String? = null,
+        destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER): String = withContext(Dispatchers.IO) {
         submission.withLock {
             require(inputs.isNotEmpty() && options.isValid())
             require(concurrency in 1..MAX_BATCH_CONCURRENCY)
             check(dao.unfinished().isEmpty()) { "An existing batch is still active." }
-            val destination = output ?: source ?: throw IOException("Choose an output folder.")
-            check(retain(destination, true)) { "This output provider did not retain read/write access. Select a SAF folder with persistent access." }
+            when (destinationMode) {
+                OutputDestinationMode.CUSTOM_FOLDER -> {
+                    val dest = output ?: throw IOException("Choose a custom output folder.")
+                    check(retain(dest, true)) { "Selected custom folder did not retain read/write access. Select a folder with persistent access." }
+                }
+                OutputDestinationMode.SUBFOLDER -> {
+                    val dest = source ?: output ?: throw IOException("Choose an output folder.")
+                    check(retain(dest, true)) { "Selected folder did not retain read/write access. Select a SAF folder with persistent access." }
+                }
+                OutputDestinationMode.REPLACE_ORIGINAL -> {
+                    if (source != null) {
+                        retain(source, true)
+                    }
+                }
+            }
             val id = UUID.randomUUID().toString()
             val job = BatchJob(id = id, outputTree = output?.toString(), sourceTree = source?.toString(),
                 sourceFolderName = sourceFolderName, outputFolderName = outputFolderName,
                 concurrency = concurrency, mode = options.processingMode.name, dimension = options.maxDimension,
                 keepOriginal = options.keepOriginalSize, format = options.outputFormat.name, quality = options.quality,
-                background = options.backgroundColor.value.toLong(), preserveMetadata = options.preserveMetadata)
+                background = options.backgroundColor.value.toLong(), preserveMetadata = options.preserveMetadata,
+                destinationMode = destinationMode.name)
             var stored = false
             try {
                 val items = inputs.mapIndexed { index, input ->

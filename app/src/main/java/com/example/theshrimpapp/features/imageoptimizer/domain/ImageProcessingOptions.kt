@@ -7,6 +7,12 @@ enum class ProcessingMode(val displayName: String) {
     REDUCE_SIZE("Resize & Convert")
 }
 
+enum class OutputDestinationMode(val displayName: String) {
+    REPLACE_ORIGINAL("Replace original"),
+    SUBFOLDER("Subfolder in source folder"),
+    CUSTOM_FOLDER("Custom folder")
+}
+
 enum class OutputFormat(
     val id: String,
     val displayName: String,
