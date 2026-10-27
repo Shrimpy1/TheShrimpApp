@@ -128,7 +128,8 @@ class ImageOptimizerViewModel @Inject constructor(
                     _uiState.update { current ->
                         val wasProcessing = current.isProcessing
                         val justFinished = wasProcessing && !progress.isActive
-                        val initialLoadOfCompleted = current.batchJobId == null && !progress.isActive
+                        val initialLoadOfCompleted =
+                            current.batchJobId == null && !progress.isActive
                         val shouldWipeSelection = justFinished || initialLoadOfCompleted
 
                         val restoreJob = current.batchJobId == null || progress.isActive
@@ -195,7 +196,9 @@ class ImageOptimizerViewModel @Inject constructor(
                             },
                             concurrency = job.concurrency,
                             destinationMode = if (restoreJob) try {
-                                com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.valueOf(job.destinationMode)
+                                com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.valueOf(
+                                    job.destinationMode
+                                )
                             } catch (_: Exception) {
                                 com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.SUBFOLDER
                             } else current.destinationMode,
@@ -208,7 +211,9 @@ class ImageOptimizerViewModel @Inject constructor(
                             preserveMetadata = if (restoreJob) job.preserveMetadata else current.preserveMetadata,
                             outputFolderUri = if (restoreJob) job.outputTree?.let(Uri::parse) else current.outputFolderUri,
                             outputFolderName = if (restoreJob && job.outputTree != null) resolvedOutputFolderName else current.outputFolderName,
-                            selectedFolderUri = if (shouldWipeSelection) null else if (restoreJob) job.sourceTree?.let(Uri::parse) else current.selectedFolderUri,
+                            selectedFolderUri = if (shouldWipeSelection) null else if (restoreJob) job.sourceTree?.let(
+                                Uri::parse
+                            ) else current.selectedFolderUri,
                             selectedFolderName = if (shouldWipeSelection) null else if (restoreJob && job.sourceTree != null) resolvedSourceFolderName else current.selectedFolderName,
                             jpegBackgroundColor = if (restoreJob) JpegBackgroundColor.entries.firstOrNull {
                                 it.color.value.toLong() == job.background
@@ -264,7 +269,10 @@ class ImageOptimizerViewModel @Inject constructor(
                 statusMessage = "Preparing background batch...",
                 showPreviousBatch = false,
                 dismissedBatchId = null,
-                batch = BatchProgress(status = BatchStatus.QUEUED, totalCount = state.selectedImages.size)
+                batch = BatchProgress(
+                    status = BatchStatus.QUEUED,
+                    totalCount = state.selectedImages.size
+                )
             )
         }
         viewModelScope.launch {
@@ -363,6 +371,7 @@ class ImageOptimizerViewModel @Inject constructor(
                         name?.endsWith(".png", ignoreCase = true) == true ||
                         name?.endsWith(".webp", ignoreCase = true) == true
             }
+
             FolderImageSelectionMode.CUSTOM -> {
                 customFormats.any { it.matches(name, mimeType) }
             }
@@ -376,7 +385,7 @@ class ImageOptimizerViewModel @Inject constructor(
         readNested: Boolean,
         selectionMode: FolderImageSelectionMode,
         customFormats: Set<SupportedImageFormat>,
-        maxLimit: Int = 2000
+        maxLimit: Int = 4000
     ): List<ImageItem> {
         val result = mutableListOf<ImageItem>()
         val dirQueue = ArrayDeque<DocumentFile>()
