@@ -95,7 +95,7 @@ fun OutputSelectionScreen(
                         }
                     } else {
                         val isDestinationValid = when (uiState.destinationMode) {
-                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> uiState.selectedFolderUri != null
+                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> uiState.selectedFolders.isNotEmpty() || uiState.selectedFolderUri != null
                             OutputDestinationMode.CUSTOM_FOLDER -> uiState.outputFolderUri != null
                         }
                         Button(
@@ -174,8 +174,9 @@ fun OutputSelectionScreen(
 
                     OutputDestinationMode.entries.forEach { mode ->
                         val isSelected = uiState.destinationMode == mode
+                        val hasSourceFolder = uiState.selectedFolders.isNotEmpty() || uiState.selectedFolderUri != null
                         val isModeEnabled = !uiState.isProcessing && !uiState.isLoading && when (mode) {
-                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> uiState.selectedFolderUri != null
+                            OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER -> hasSourceFolder
                             else -> true
                         }
 
@@ -200,12 +201,16 @@ fun OutputSelectionScreen(
                                     )
                                     val description = when (mode) {
                                         OutputDestinationMode.REPLACE_ORIGINAL ->
-                                            if (uiState.selectedFolderUri != null)
+                                            if (uiState.selectedFolders.size > 1)
+                                                "Replaces original images directly in their respective folders (${uiState.selectedFolders.size} folders)."
+                                            else if (hasSourceFolder)
                                                 "Replaces original images directly in ${uiState.selectedFolderName ?: "source folder"}."
                                             else
                                                 "Requires source folder selection (Photo Picker files are read-only)."
                                         OutputDestinationMode.SUBFOLDER ->
-                                            if (uiState.selectedFolderUri != null)
+                                            if (uiState.selectedFolders.size > 1)
+                                                "Creates an 'Optimized' subfolder in each of the ${uiState.selectedFolders.size} selected folders."
+                                            else if (hasSourceFolder)
                                                 "Saves to 'Optimized' subfolder in ${uiState.selectedFolderName ?: "source folder"}."
                                             else
                                                 "Requires source folder selection."

@@ -15,7 +15,12 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class BatchInput(val uri: Uri, val name: String?, val sizeBytes: Long? = null)
+data class BatchInput(
+    val uri: Uri,
+    val name: String?,
+    val sizeBytes: Long? = null,
+    val sourceTreeUri: Uri? = null
+)
 
 @Singleton
 class BatchRepository @Inject constructor(
@@ -70,18 +75,23 @@ class BatchRepository @Inject constructor(
             require(inputs.isNotEmpty() && options.isValid())
             require(concurrency in 1..MAX_BATCH_CONCURRENCY)
             check(dao.unfinished().isEmpty()) { "An existing batch is still active." }
+            val sourceFolderUris = inputs.mapNotNull { it.sourceTreeUri }.distinct()
             when (destinationMode) {
                 OutputDestinationMode.CUSTOM_FOLDER -> {
                     val dest = output ?: throw IOException("Choose a custom output folder.")
                     check(retain(dest, true)) { "Selected custom folder did not retain read/write access. Select a folder with persistent access." }
                 }
                 OutputDestinationMode.SUBFOLDER -> {
-                    val dest = source ?: output ?: throw IOException("Choose an output folder.")
-                    check(retain(dest, true)) { "Selected folder did not retain read/write access. Select a SAF folder with persistent access." }
+                    val allFolders = if (sourceFolderUris.isNotEmpty()) sourceFolderUris else listOfNotNull(source, output)
+                    check(allFolders.isNotEmpty()) { "Choose an output folder." }
+                    allFolders.forEach { folderUri ->
+                        check(retain(folderUri, true)) { "Selected folder did not retain read/write access. Select a SAF folder with persistent access." }
+                    }
                 }
                 OutputDestinationMode.REPLACE_ORIGINAL -> {
-                    if (source != null) {
-                        retain(source, true)
+                    val allFolders = if (sourceFolderUris.isNotEmpty()) sourceFolderUris else listOfNotNull(source)
+                    allFolders.forEach { folderUri ->
+                        retain(folderUri, true)
                     }
                 }
             }
@@ -97,7 +107,8 @@ class BatchRepository @Inject constructor(
                 val items = inputs.mapIndexed { index, input ->
                     coroutineContext.ensureActive()
                     val origBytes = input.sizeBytes ?: 0L
-                    if (retain(input.uri, false)) BatchItem(id, index, input.uri.toString(), input.name, originalBytes = origBytes)
+                    val itemSourceUriStr = input.sourceTreeUri?.toString()
+                    if (retain(input.uri, false)) BatchItem(id, index, input.uri.toString(), input.name, sourceTreeUri = itemSourceUriStr, originalBytes = origBytes)
                     else {
                         val staged = File(directory(id), "input-$index")
                         try {
@@ -112,11 +123,11 @@ class BatchRepository @Inject constructor(
                                     }
                                 }
                             } ?: throw IOException("Input cannot be opened; select it again.")
-                            BatchItem(id, index, Uri.fromFile(staged).toString(), input.name, originalUri = input.uri.toString(), originalBytes = origBytes)
+                            BatchItem(id, index, Uri.fromFile(staged).toString(), input.name, originalUri = input.uri.toString(), sourceTreeUri = itemSourceUriStr, originalBytes = origBytes)
                         } catch (e: CancellationException) { throw e }
                         catch (e: Exception) {
                             staged.delete()
-                            BatchItem(id, index, input.uri.toString(), input.name, state = "FAILED",
+                            BatchItem(id, index, input.uri.toString(), input.name, sourceTreeUri = itemSourceUriStr, state = "FAILED",
                                 reason = "Input access failed: ${e.localizedMessage}", originalBytes = origBytes)
                         }
                     }

@@ -26,12 +26,14 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +46,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
+import com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat
 import java.util.Locale
 
 @Composable
@@ -138,7 +142,8 @@ fun ImageOptimizerScreen(
                         )
 
                         if (uiState.batch.totalCount > 0) {
-                            val progress = uiState.batch.completedCount.toFloat() / uiState.batch.totalCount
+                            val progress =
+                                uiState.batch.completedCount.toFloat() / uiState.batch.totalCount
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth()
@@ -173,7 +178,11 @@ fun ImageOptimizerScreen(
                     }
                 }
             } else if (uiState.showPreviousBatch && (uiState.batch.results.isNotEmpty() ||
-                    uiState.batch.status in listOf(BatchStatus.COMPLETED, BatchStatus.CANCELLED, BatchStatus.FAILED))
+                        uiState.batch.status in listOf(
+                    BatchStatus.COMPLETED,
+                    BatchStatus.CANCELLED,
+                    BatchStatus.FAILED
+                ))
             ) {
                 // Previous Batch Result Card + "Make a New Batch" button below it
                 ElevatedCard(
@@ -212,26 +221,43 @@ fun ImageOptimizerScreen(
                             }
                         }
 
-                        val savedCount = uiState.batch.results.count { it.result is SaveImageResult.Saved }
-                        val unchangedCount = uiState.batch.results.count { it.result is SaveImageResult.Unchanged }
-                        val failedCount = uiState.batch.results.count { it.result is SaveImageResult.Failed }
+                        val savedCount =
+                            uiState.batch.results.count { it.result is SaveImageResult.Saved }
+                        val unchangedCount =
+                            uiState.batch.results.count { it.result is SaveImageResult.Unchanged }
+                        val failedCount =
+                            uiState.batch.results.count { it.result is SaveImageResult.Failed }
 
                         Text(
                             text = "$savedCount saved · $unchangedCount unchanged · $failedCount failed (${uiState.batch.totalCount} total)",
                             style = MaterialTheme.typography.bodyMedium
                         )
 
-                        val savedDetails = uiState.batch.results.mapNotNull { (it.result as? SaveImageResult.Saved)?.details }
+                        val savedDetails =
+                            uiState.batch.results.mapNotNull { (it.result as? SaveImageResult.Saved)?.details }
                         if (savedDetails.isNotEmpty()) {
                             val origTotal = savedDetails.sumOf { it.originalSizeBytes }
                             val outTotal = savedDetails.sumOf { it.outputSizeBytes }
                             val netSaved = origTotal - outTotal
-                            val pct = if (origTotal > 0) (netSaved.toDouble() * 100.0) / origTotal.toDouble() else 0.0
+                            val pct =
+                                if (origTotal > 0) (netSaved.toDouble() * 100.0) / origTotal.toDouble() else 0.0
 
                             val summaryStr = if (netSaved > 0) {
-                                "Saved ${formatFileSize(netSaved)} (${String.format(Locale.US, "%.1f", pct)}% size reduction)"
+                                "Saved ${formatFileSize(netSaved)} (${
+                                    String.format(
+                                        Locale.US,
+                                        "%.1f",
+                                        pct
+                                    )
+                                }% size reduction)"
                             } else if (netSaved < 0) {
-                                "Output size increased by ${formatFileSize(-netSaved)} (+${String.format(Locale.US, "%.1f", -pct)}%)"
+                                "Output size increased by ${formatFileSize(-netSaved)} (+${
+                                    String.format(
+                                        Locale.US,
+                                        "%.1f",
+                                        -pct
+                                    )
+                                }%)"
                             } else {
                                 "No size change across saved files"
                             }
@@ -300,7 +326,101 @@ fun ImageOptimizerScreen(
                                 imageVector = Icons.Default.FolderOpen,
                                 contentDescription = null
                             )
-                            Text(text = "Select Folder")
+                            Text(text = if (uiState.selectedFolders.isNotEmpty()) "Add Folder" else "Select Folder")
+                        }
+                    }
+                }
+
+                // Folder Import Settings Options Card
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Folder Import Settings",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = uiState.readNestedFolders,
+                                onCheckedChange = { viewModel.updateReadNestedFolders(it) },
+                                enabled = !uiState.isLoading
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Read nested subfolders",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "Recursively scan all subdirectories inside selected folders.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Supported Image Types",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+
+                        FolderImageSelectionMode.entries.forEach { mode ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = uiState.folderImageSelectionMode == mode,
+                                    onClick = { viewModel.updateFolderImageSelectionMode(mode) },
+                                    enabled = !uiState.isLoading
+                                )
+                                Text(
+                                    text = mode.displayName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        if (uiState.folderImageSelectionMode == FolderImageSelectionMode.CUSTOM) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                SupportedImageFormat.entries.forEach { format ->
+                                    val isChecked = uiState.customSupportedFormats.contains(format)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Checkbox(
+                                            checked = isChecked,
+                                            onCheckedChange = { enabled ->
+                                                viewModel.toggleCustomSupportedFormat(
+                                                    format,
+                                                    enabled
+                                                )
+                                            },
+                                            enabled = !uiState.isLoading
+                                        )
+                                        Text(
+                                            text = format.displayName,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -326,7 +446,10 @@ fun ImageOptimizerScreen(
                         ) {
                             if (uiState.selectedFolderName != null) {
                                 Text(
-                                    text = "Folder: ${uiState.selectedFolderName}",
+                                    text = if (uiState.selectedFolders.size > 1)
+                                        "${uiState.selectedFolders.size} Folders: ${uiState.selectedFolders.joinToString { it.name }}"
+                                    else
+                                        "Folder: ${uiState.selectedFolderName}",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -337,7 +460,10 @@ fun ImageOptimizerScreen(
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "Count", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        text = "Count",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
                                     Text(
                                         text = "${uiState.selectedImages.size}",
                                         style = MaterialTheme.typography.titleMedium

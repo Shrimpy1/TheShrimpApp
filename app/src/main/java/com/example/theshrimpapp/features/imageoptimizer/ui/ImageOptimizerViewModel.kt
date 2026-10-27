@@ -13,10 +13,12 @@ import com.example.theshrimpapp.features.imageoptimizer.data.ImageOutputSaver
 import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
+import com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -186,6 +188,11 @@ class ImageOptimizerViewModel @Inject constructor(
                                 shouldWipeSelection -> 0
                                 else -> current.selectedImagesCount
                             },
+                            selectedFolders = when {
+                                progress.isActive -> current.selectedFolders
+                                shouldWipeSelection -> emptyList()
+                                else -> current.selectedFolders
+                            },
                             concurrency = job.concurrency,
                             destinationMode = if (restoreJob) try {
                                 com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.valueOf(job.destinationMode)
@@ -267,7 +274,8 @@ class ImageOptimizerViewModel @Inject constructor(
                         com.example.theshrimpapp.features.imageoptimizer.background.BatchInput(
                             it.uri,
                             it.name,
-                            it.sizeBytes
+                            it.sizeBytes,
+                            it.sourceFolderUri
                         )
                     },
                     output = state.outputFolderUri,
@@ -297,6 +305,9 @@ class ImageOptimizerViewModel @Inject constructor(
                 batchJobId = null,
                 selectedImages = emptyList(),
                 selectedImagesCount = 0,
+                selectedFolders = emptyList(),
+                selectedFolderUri = null,
+                selectedFolderName = null,
                 statusMessage = "Ready to select images"
             )
         }
@@ -315,6 +326,93 @@ class ImageOptimizerViewModel @Inject constructor(
         }
     }
 
+    fun updateReadNestedFolders(readNested: Boolean) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { it.copy(readNestedFolders = readNested) }
+    }
+
+    fun updateFolderImageSelectionMode(mode: FolderImageSelectionMode) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { it.copy(folderImageSelectionMode = mode) }
+    }
+
+    fun toggleCustomSupportedFormat(format: SupportedImageFormat, enabled: Boolean) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { state ->
+            val updated = if (enabled) {
+                state.customSupportedFormats + format
+            } else {
+                state.customSupportedFormats - format
+            }
+            state.copy(customSupportedFormats = updated)
+        }
+    }
+
+    private fun isFileFormatMatching(
+        name: String?,
+        mimeType: String?,
+        selectionMode: FolderImageSelectionMode,
+        customFormats: Set<SupportedImageFormat>
+    ): Boolean {
+        return when (selectionMode) {
+            FolderImageSelectionMode.ALL_SUPPORTED -> {
+                SupportedImageFormat.entries.any { it.matches(name, mimeType) } ||
+                        (mimeType?.startsWith("image/") == true) ||
+                        name?.endsWith(".jpg", ignoreCase = true) == true ||
+                        name?.endsWith(".jpeg", ignoreCase = true) == true ||
+                        name?.endsWith(".png", ignoreCase = true) == true ||
+                        name?.endsWith(".webp", ignoreCase = true) == true
+            }
+            FolderImageSelectionMode.CUSTOM -> {
+                customFormats.any { it.matches(name, mimeType) }
+            }
+        }
+    }
+
+    private fun scanDirectory(
+        rootDoc: DocumentFile,
+        rootUri: Uri,
+        folderName: String,
+        readNested: Boolean,
+        selectionMode: FolderImageSelectionMode,
+        customFormats: Set<SupportedImageFormat>,
+        maxLimit: Int = 2000
+    ): List<ImageItem> {
+        val result = mutableListOf<ImageItem>()
+        val dirQueue = ArrayDeque<DocumentFile>()
+        dirQueue.add(rootDoc)
+
+        while (dirQueue.isNotEmpty() && result.size < maxLimit) {
+            val currentDir = dirQueue.removeFirst()
+            val children = currentDir.listFiles()
+            for (file in children) {
+                if (file.isDirectory) {
+                    if (readNested) {
+                        dirQueue.add(file)
+                    }
+                } else if (file.isFile) {
+                    val name = file.name ?: "Unknown"
+                    val mimeType = file.type
+                    if (isFileFormatMatching(name, mimeType, selectionMode, customFormats)) {
+                        val size = file.length()
+                        result.add(
+                            ImageItem(
+                                uri = file.uri,
+                                name = name,
+                                sizeBytes = if (size > 0) size else null,
+                                mimeType = mimeType ?: "image/*",
+                                sourceFolderUri = rootUri,
+                                sourceFolderName = folderName
+                            )
+                        )
+                        if (result.size >= maxLimit) break
+                    }
+                }
+            }
+        }
+        return result
+    }
+
     fun selectFolder(uri: Uri) {
         if (_uiState.value.isProcessing) return
         _uiState.update { it.copy(isLoading = true, statusMessage = "Loading folder contents...") }
@@ -328,6 +426,7 @@ class ImageOptimizerViewModel @Inject constructor(
             }
 
             try {
+                val currentState = _uiState.value
                 val docFile = DocumentFile.fromTreeUri(context, uri)
                 if (docFile == null || !docFile.canRead()) {
                     _uiState.update {
@@ -340,48 +439,56 @@ class ImageOptimizerViewModel @Inject constructor(
                 }
 
                 val folderName = docFile.name ?: "Selected Folder"
-                val imageItems = mutableListOf<ImageItem>()
+                val readNested = currentState.readNestedFolders
+                val selectionMode = currentState.folderImageSelectionMode
+                val customFormats = currentState.customSupportedFormats
 
-                docFile.listFiles().forEach { file ->
-                    if (file.isFile) {
-                        val name = file.name ?: "Unknown"
-                        val mimeType = file.type
-                        val size = file.length()
-                        val isSupported = (mimeType?.startsWith("image/") == true) ||
-                                name.endsWith(".jpg", ignoreCase = true) ||
-                                name.endsWith(".jpeg", ignoreCase = true) ||
-                                name.endsWith(".png", ignoreCase = true) ||
-                                name.endsWith(".webp", ignoreCase = true)
+                val imageItems = scanDirectory(
+                    rootDoc = docFile,
+                    rootUri = uri,
+                    folderName = folderName,
+                    readNested = readNested,
+                    selectionMode = selectionMode,
+                    customFormats = customFormats
+                )
 
-                        if (isSupported) {
-                            imageItems.add(
-                                ImageItem(
-                                    uri = file.uri,
-                                    name = name,
-                                    sizeBytes = if (size > 0) size else null,
-                                    mimeType = mimeType ?: "image/*"
-                                )
-                            )
-                        }
-                    }
-                }
-
-                _uiState.update { currentState ->
-                    val existingUris = currentState.selectedImages.map { it.uri }.toSet()
+                _uiState.update { state ->
+                    val existingUris = state.selectedImages.map { it.uri }.toSet()
                     val uniqueNewItems = imageItems.filter { it.uri !in existingUris }
-                    val combined = currentState.selectedImages + uniqueNewItems
+                    val combined = state.selectedImages + uniqueNewItems
                     val updatedList = combined.take(2000)
                     val wasCapped = combined.size > 2000
-                    currentState.copy(
+
+                    val folderObj = SelectedFolder(
+                        uri = uri,
+                        name = folderName,
+                        readNestedFolders = readNested,
+                        folderImageSelectionMode = selectionMode,
+                        customSupportedFormats = customFormats
+                    )
+                    val updatedFolders = if (state.selectedFolders.any { it.uri == uri }) {
+                        state.selectedFolders
+                    } else {
+                        state.selectedFolders + folderObj
+                    }
+
+                    val folderNameSummary = when {
+                        updatedFolders.isEmpty() -> null
+                        updatedFolders.size == 1 -> updatedFolders.first().name
+                        else -> "${updatedFolders.size} Folders (${updatedFolders.joinToString { it.name }})"
+                    }
+
+                    state.copy(
                         isLoading = false,
+                        selectedFolders = updatedFolders,
                         selectedFolderUri = uri,
-                        selectedFolderName = folderName,
+                        selectedFolderName = folderNameSummary,
                         selectedImages = updatedList,
                         selectedImagesCount = updatedList.size,
                         statusMessage = if (wasCapped) {
                             "Loaded folder '$folderName': capped at 2000 files max"
                         } else {
-                            "Loaded folder '$folderName': found ${imageItems.size} supported image(s)"
+                            "Loaded folder '$folderName': found ${imageItems.size} supported image(s) (${updatedList.size} total across ${updatedFolders.size} folder(s))"
                         }
                     )
                 }
@@ -454,7 +561,24 @@ class ImageOptimizerViewModel @Inject constructor(
         if (_uiState.value.isProcessing) return
         _uiState.update { currentState ->
             val updatedList = currentState.selectedImages.filter { it.uri != uri }
+            val remainingFolders = updatedList.mapNotNull { item ->
+                item.sourceFolderUri?.let { folderUri ->
+                    item.sourceFolderName?.let { folderName ->
+                        SelectedFolder(folderUri, folderName)
+                    }
+                }
+            }.distinct()
+
+            val folderNameSummary = when {
+                remainingFolders.isEmpty() -> null
+                remainingFolders.size == 1 -> remainingFolders.first().name
+                else -> "${remainingFolders.size} Folders (${remainingFolders.joinToString { it.name }})"
+            }
+
             currentState.copy(
+                selectedFolders = remainingFolders,
+                selectedFolderUri = remainingFolders.lastOrNull()?.uri,
+                selectedFolderName = folderNameSummary,
                 selectedImages = updatedList,
                 selectedImagesCount = updatedList.size,
                 statusMessage = if (updatedList.isEmpty()) "Ready to select images" else "Selected ${updatedList.size} image(s)"
@@ -466,6 +590,7 @@ class ImageOptimizerViewModel @Inject constructor(
         if (_uiState.value.isProcessing) return
         _uiState.update { currentState ->
             currentState.copy(
+                selectedFolders = emptyList(),
                 selectedFolderUri = null,
                 selectedFolderName = null,
                 selectedImages = emptyList(),

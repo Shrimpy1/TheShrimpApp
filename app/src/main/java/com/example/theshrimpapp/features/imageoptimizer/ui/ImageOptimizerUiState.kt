@@ -8,20 +8,34 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
 import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 
+data class SelectedFolder(
+    val uri: Uri,
+    val name: String,
+    val readNestedFolders: Boolean = false,
+    val folderImageSelectionMode: com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode = com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode.ALL_SUPPORTED,
+    val customSupportedFormats: Set<com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat> = emptySet()
+)
+
 data class ImageItem(
     val uri: Uri,
     val name: String? = null,
     val sizeBytes: Long? = null,
-    val mimeType: String? = null
+    val mimeType: String? = null,
+    val sourceFolderUri: Uri? = null,
+    val sourceFolderName: String? = null
 )
 
 data class ImageOptimizerUiState(
     val selectedImages: List<ImageItem> = emptyList(),
     val selectedImagesCount: Int = 0,
+    val selectedFolders: List<SelectedFolder> = emptyList(),
     val selectedFolderUri: Uri? = null,
     val selectedFolderName: String? = null,
     val outputFolderUri: Uri? = null,
     val outputFolderName: String? = null,
+    val readNestedFolders: Boolean = false,
+    val folderImageSelectionMode: com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode = com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode.ALL_SUPPORTED,
+    val customSupportedFormats: Set<com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat> = com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat.entries.toSet(),
     val destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER,
     val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
     val maxDimension: Int = 1920,

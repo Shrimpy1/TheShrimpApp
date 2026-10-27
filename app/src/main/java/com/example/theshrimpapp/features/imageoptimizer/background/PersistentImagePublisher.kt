@@ -53,10 +53,8 @@ class PersistentImagePublisher @Inject constructor(
                 }
                 val known =
                     item.outputUri?.let { DocumentFile.fromSingleUri(context, it.toUri()) }
-                var directory = DocumentFile.fromTreeUri(
-                    context,
-                    (job.outputTree ?: job.sourceTree ?: return@withContext null).toUri()
-                )
+                val treeUriStr = item.sourceTreeUri ?: job.outputTree ?: job.sourceTree ?: return@withContext null
+                var directory = DocumentFile.fromTreeUri(context, treeUriStr.toUri())
                 if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name && job.outputTree == null) {
                     directory = directory?.findFile("Optimized")
                 }
@@ -113,7 +111,7 @@ class PersistentImagePublisher @Inject constructor(
 
                 return@withContext withContext(NonCancellable) {
                     try {
-                        val treeUriStr = job.sourceTree ?: job.outputTree
+                        val treeUriStr = item.sourceTreeUri ?: job.sourceTree ?: job.outputTree
                         val parentDir = treeUriStr?.let { DocumentFile.fromTreeUri(context, it.toUri()) }
                         val originalDoc = parentDir?.findFile(origName) ?: DocumentFile.fromSingleUri(context, targetUri)
 
@@ -160,8 +158,12 @@ class PersistentImagePublisher @Inject constructor(
 
             var checkpoint = item
             val output = creation.withLock {
-                val tree = (job.outputTree ?: job.sourceTree
-                ?: throw IOException("Output folder missing.")).toUri()
+                val treeUriStr = if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name) {
+                    item.sourceTreeUri ?: job.sourceTree
+                } else {
+                    job.outputTree ?: item.sourceTreeUri ?: job.sourceTree
+                }
+                val tree = (treeUriStr ?: throw IOException("Output folder missing.")).toUri()
                 var directory = DocumentFile.fromTreeUri(context, tree)
                     ?: throw IOException("Output folder unavailable.")
                 check(directory.isDirectory && directory.canRead() && directory.canWrite()) { "Output access revoked; select an accessible folder for a new batch." }
@@ -226,7 +228,7 @@ class PersistentImagePublisher @Inject constructor(
                 } else {
                     checkpoint = item.copy(
                         outputUri = document.uri.toString(),
-                        outputName = document.name ?: name
+                        outputName = name
                     )
                     withContext(NonCancellable) { dao.updateItem(checkpoint) }
                     document

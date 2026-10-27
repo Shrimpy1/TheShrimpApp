@@ -61,6 +61,7 @@ data class BatchItem(
     val jobId: String, val position: Int,
     val inputUri: String, val name: String?,
     val originalUri: String = inputUri,
+    val sourceTreeUri: String? = null,
     val state: String = "PENDING",
     val outputUri: String? = null,
     val outputName: String? = null,
@@ -93,34 +94,45 @@ data class StoredBatch(
 interface BatchDao {
     @Insert
     suspend fun insertJob(job: BatchJob)
+
     @Insert
     suspend fun insertItems(items: List<BatchItem>)
+
     @Update
     suspend fun updateItem(item: BatchItem)
+
     @Query("SELECT * FROM batch_jobs WHERE id = :id")
     suspend fun job(id: String): BatchJob?
+
     @Query("SELECT * FROM batch_items WHERE jobId = :id ORDER BY position")
     suspend fun items(id: String): List<BatchItem>
+
     @Transaction
     @Query("SELECT * FROM batch_jobs ORDER BY createdAt DESC LIMIT 1")
     fun latest(): Flow<StoredBatch?>
+
     @Query("SELECT * FROM batch_jobs WHERE state IN ('QUEUED', 'PROCESSING', 'CANCELLING', 'INTERRUPTED')")
     suspend fun unfinished(): List<BatchJob>
+
     @Query("UPDATE batch_jobs SET state = :state, error = :error WHERE id = :id")
     suspend fun status(id: String, state: String, error: String? = null)
+
     @Query("UPDATE batch_jobs SET cancelRequested = 1, state = 'CANCELLING' WHERE id = :id AND state NOT IN ('COMPLETED', 'CANCELLED', 'FAILED')")
     suspend fun cancel(id: String)
+
     @Query("UPDATE batch_items SET state = 'CANCELLED', reason = COALESCE(reason, 'Not processed: batch cancelled') WHERE jobId = :id AND state NOT IN ('SAVED', 'UNCHANGED', 'FAILED')")
     suspend fun cancelRemaining(id: String)
+
     @Query("DELETE FROM batch_jobs WHERE id = :id")
     suspend fun deleteJob(id: String)
+
     @Transaction
     suspend fun create(job: BatchJob, items: List<BatchItem>) {
         insertJob(job); insertItems(items)
     }
 }
 
-@Database(entities = [BatchJob::class, BatchItem::class], version = 3, exportSchema = false)
+@Database(entities = [BatchJob::class, BatchItem::class], version = 4, exportSchema = false)
 abstract class BatchDatabase : RoomDatabase() {
     abstract fun batches(): BatchDao
 }
