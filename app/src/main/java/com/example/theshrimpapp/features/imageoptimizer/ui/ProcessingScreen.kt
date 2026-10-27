@@ -1,5 +1,6 @@
 package com.example.theshrimpapp.features.imageoptimizer.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,10 +9,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -28,6 +34,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
+import com.example.theshrimpapp.ui.theme.StatusError
+import com.example.theshrimpapp.ui.theme.StatusSuccess
+import com.example.theshrimpapp.ui.theme.StatusWarning
+import java.util.Locale
 
 @Composable
 fun ProcessingScreen(
@@ -69,11 +79,11 @@ fun ProcessingScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    if (batch.status == BatchStatus.CANCELLING) "Cancelling..." else "Cancel batch"
+                                    if (batch.status == BatchStatus.CANCELLING) "Cancelling..." else "Cancel Batch"
                                 )
                             }
                             Text(
-                                text = "Cancellation finishes active images and stops the remaining queue.",
+                                text = "Cancellation stops active queue after current files finish.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -98,7 +108,7 @@ fun ProcessingScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Row without return button
+            // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -109,93 +119,162 @@ fun ProcessingScreen(
                 )
             }
 
-            // Status Summary Card
+            // Compact Progress Tracker Card
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
                         text = uiState.statusMessage,
                         style = MaterialTheme.typography.titleMedium
                     )
 
-                    if (batch.totalCount > 0) {
-                        val progress = batch.completedCount.toFloat() / batch.totalCount
+                    val total = batch.totalCount
+                    val completed = batch.completedCount
+                    val progressRatio = if (total > 0) completed.toFloat() / total.toFloat() else 0f
+                    val percentageStr = String.format(Locale.US, "%.0f%%", progressRatio * 100f)
 
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    if (total > 0) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LinearProgressIndicator(
+                                progress = { progressRatio },
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
-                        Text(
-                            text = "${batch.completedCount} of ${batch.totalCount} processed",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-
-                    batch.activeItems.forEach { active ->
-                        Text(
-                            text = "Processing: ${active.name ?: "Image"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    val saved = batch.results.count { it.result is SaveImageResult.Saved }
-                    val failed = batch.results.count { it.result is SaveImageResult.Failed }
-                    val unchanged = batch.results.count { it.result is SaveImageResult.Unchanged }
-
-                    Text(
-                        text = "$saved saved · $unchanged unchanged · $failed failed",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-
-            // Per-item Results List
-            if (batch.results.isNotEmpty()) {
-                Text(
-                    text = "Live Progress",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(batch.results, key = { it.item.uri.toString() }) { entry ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = entry.item.name ?: "Image",
+                                    text = "$completed of $total processed",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
-                                val statusText = when (val result = entry.result) {
-                                    is SaveImageResult.Saved -> "Saved as ${result.name}"
-                                    is SaveImageResult.Unchanged -> "Unchanged: ${result.reason}"
-                                    is SaveImageResult.Failed -> "Failed: ${result.error}"
-                                }
-                                val color = when (entry.result) {
-                                    is SaveImageResult.Saved -> MaterialTheme.colorScheme.primary
-                                    is SaveImageResult.Unchanged -> MaterialTheme.colorScheme.secondary
-                                    is SaveImageResult.Failed -> MaterialTheme.colorScheme.error
-                                }
                                 Text(
-                                    text = statusText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = color
+                                    text = percentageStr,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+
+                    // Source Folder & Parallel Processing Context
+                    if (uiState.selectedFolderName != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Working on: ${uiState.selectedFolderName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "${uiState.concurrency} parallel worker threads active",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Compact Tally Metrics Row (Vertical layout for each count to fit all screen widths cleanly)
+                    val savedCount = batch.results.count { it.result is SaveImageResult.Saved }
+                    val unchangedCount = batch.results.count { it.result is SaveImageResult.Unchanged }
+                    val failedCount = batch.results.count { it.result is SaveImageResult.Failed }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = MaterialTheme.shapes.medium
+                            )
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Saved Metric
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Saved",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = StatusSuccess
+                                )
+                            }
+                            Text(
+                                text = "$savedCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = StatusSuccess
+                            )
+                        }
+
+                        // Unchanged Metric
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Unchanged",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = StatusWarning
+                                )
+                            }
+                            Text(
+                                text = "$unchangedCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = StatusWarning
+                            )
+                        }
+
+                        // Failed Metric
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Error,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Failed",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = StatusError
+                                )
+                            }
+                            Text(
+                                text = "$failedCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = StatusError
+                            )
                         }
                     }
                 }

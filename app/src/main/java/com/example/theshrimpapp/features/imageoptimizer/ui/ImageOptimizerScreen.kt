@@ -1,10 +1,8 @@
 package com.example.theshrimpapp.features.imageoptimizer.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,56 +10,59 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.example.theshrimpapp.components.FileTypePieChart
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
-import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
+import com.example.theshrimpapp.components.LabeledCheckbox
+import com.example.theshrimpapp.components.LabeledRadioButton
 import com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat
 import java.util.Locale
 
 @Composable
 fun ImageOptimizerScreen(
+    modifier: Modifier = Modifier,
     onNavigateToOutput: () -> Unit,
     onNavigateToProcessing: () -> Unit = {},
     onNavigateToResult: () -> Unit = {},
-    modifier: Modifier = Modifier,
     viewModel: ImageOptimizerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val pickImagesLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.addImages(uris)
@@ -76,10 +77,12 @@ fun ImageOptimizerScreen(
         }
     }
 
+    var isFolderSettingsExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
         bottomBar = {
-            if (uiState.selectedImages.isNotEmpty()) {
+            if (uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     tonalElevation = 3.dp
@@ -90,17 +93,20 @@ fun ImageOptimizerScreen(
                             .padding(16.dp)
                     ) {
                         Button(
-                            onClick = {
-                                if (uiState.isProcessing) {
-                                    onNavigateToProcessing()
-                                } else {
-                                    onNavigateToOutput()
-                                }
-                            },
+                            onClick = onNavigateToOutput,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isLoading
                         ) {
-                            Text(text = if (uiState.isProcessing) "View Batch Progress" else "Proceed to Output Settings")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Proceed to Output Settings (${uiState.selectedImages.size})")
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null
+                                )
+                            }
                         }
                     }
                 }
@@ -117,28 +123,31 @@ fun ImageOptimizerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Active Processing Banner
             if (uiState.isProcessing) {
-                // Active Processing Banner when a batch is currently running
                 ElevatedCard(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhotoLibrary,
                             contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier.size(40.dp)
                         )
 
                         Text(
                             text = "Batch Processing in Progress",
-                            style = MaterialTheme.typography.titleLarge
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
 
                         if (uiState.batch.totalCount > 0) {
@@ -151,17 +160,12 @@ fun ImageOptimizerScreen(
 
                             Text(
                                 text = "${uiState.batch.completedCount} of ${uiState.batch.totalCount} processed",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         } else {
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         }
-
-                        Text(
-                            text = uiState.statusMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
 
                         Button(
                             onClick = onNavigateToProcessing,
@@ -169,23 +173,11 @@ fun ImageOptimizerScreen(
                         ) {
                             Text(text = "View Batch Progress")
                         }
-
-                        Text(
-                            text = "Queue modification and new batch creation are locked until processing completes.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
-            } else if (uiState.showPreviousBatch && (uiState.batch.results.isNotEmpty() ||
-                        uiState.batch.status in listOf(
-                    BatchStatus.COMPLETED,
-                    BatchStatus.CANCELLED,
-                    BatchStatus.FAILED
-                ))
-            ) {
-                // Previous Batch Result Card + "Make a New Batch" button below it
-                ElevatedCard(
+            } else {
+                // Folder Import Settings Card (POSITIONED ON TOP OF SELECT BUTTONS)
+                Card(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -194,113 +186,130 @@ fun ImageOptimizerScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Explicitly styled clickable header button
+                        Surface(
+                            onClick = { isFolderSettingsExpanded = !isFolderSettingsExpanded },
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "Previous Batch Result",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            val (statusText, statusBg) = when (uiState.batch.status) {
-                                BatchStatus.COMPLETED -> "Completed" to MaterialTheme.colorScheme.primaryContainer
-                                BatchStatus.CANCELLED -> "Cancelled" to MaterialTheme.colorScheme.secondaryContainer
-                                BatchStatus.FAILED -> "Failed" to MaterialTheme.colorScheme.errorContainer
-                                else -> "Finished" to MaterialTheme.colorScheme.surfaceVariant
-                            }
-                            Surface(
-                                color = statusBg,
-                                shape = CircleShape
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = statusText,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "Import Settings",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
+                                }
+
+                                Icon(
+                                    imageVector = if (isFolderSettingsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null
                                 )
                             }
                         }
 
-                        val savedCount =
-                            uiState.batch.results.count { it.result is SaveImageResult.Saved }
-                        val unchangedCount =
-                            uiState.batch.results.count { it.result is SaveImageResult.Unchanged }
-                        val failedCount =
-                            uiState.batch.results.count { it.result is SaveImageResult.Failed }
-
-                        Text(
-                            text = "$savedCount saved · $unchangedCount unchanged · $failedCount failed (${uiState.batch.totalCount} total)",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        val savedDetails =
-                            uiState.batch.results.mapNotNull { (it.result as? SaveImageResult.Saved)?.details }
-                        if (savedDetails.isNotEmpty()) {
-                            val origTotal = savedDetails.sumOf { it.originalSizeBytes }
-                            val outTotal = savedDetails.sumOf { it.outputSizeBytes }
-                            val netSaved = origTotal - outTotal
-                            val pct =
-                                if (origTotal > 0) (netSaved.toDouble() * 100.0) / origTotal.toDouble() else 0.0
-
-                            val summaryStr = if (netSaved > 0) {
-                                "Saved ${formatFileSize(netSaved)} (${
-                                    String.format(
-                                        Locale.US,
-                                        "%.1f",
-                                        pct
+                        // Collapsible Dropdown Content (hidden by default)
+                        AnimatedVisibility(visible = isFolderSettingsExpanded) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                // 1. Subfolder scanning toggle
+                                LabeledCheckbox(
+                                    checked = uiState.readNestedFolders,
+                                    onCheckedChange = { viewModel.updateReadNestedFolders(it) },
+                                    enabled = !uiState.isLoading
+                                ) {
+                                    Text(
+                                        text = "Include nested folders",
+                                        style = MaterialTheme.typography.bodySmall
                                     )
-                                }% size reduction)"
-                            } else if (netSaved < 0) {
-                                "Output size increased by ${formatFileSize(-netSaved)} (+${
-                                    String.format(
-                                        Locale.US,
-                                        "%.1f",
-                                        -pct
-                                    )
-                                }%)"
-                            } else {
-                                "No size change across saved files"
+                                }
+
+                                // 2. Supported Image Types
+                                Text(
+                                    text = "Supported Image Types",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+
+                                FolderImageSelectionMode.entries.forEach { mode ->
+                                    LabeledRadioButton(
+                                        selected = uiState.folderImageSelectionMode == mode,
+                                        onClick = {
+                                            viewModel.updateFolderImageSelectionMode(mode)
+                                        },
+                                        enabled = !uiState.isLoading
+                                    ) {
+                                        Text(
+                                            text = mode.displayName,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+
+                                if (uiState.folderImageSelectionMode == FolderImageSelectionMode.CUSTOM) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, top = 4.dp)
+                                    ) {
+                                        SupportedImageFormat.entries.forEach { format ->
+                                            val isChecked =
+                                                uiState.customSupportedFormats.contains(format)
+                                            LabeledCheckbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { enabled ->
+                                                    viewModel.toggleCustomSupportedFormat(
+                                                        format,
+                                                        enabled
+                                                    )
+                                                },
+                                                enabled = !uiState.isLoading
+                                            ) {
+                                                Text(
+                                                    text = format.displayName,
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-
-                            Text(
-                                text = summaryStr,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (netSaved >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-
-                        Button(
-                            onClick = onNavigateToResult,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = "View Full Results")
-                        }
-
-                        Button(
-                            onClick = { viewModel.clearFinishedBatch() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = "Make a New Batch")
                         }
                     }
                 }
-            } else {
-                // Normal Selection Mode - Make a New Batch (File Selection)
+
+                // File & Folder Select Buttons (POSITIONED BELOW IMPORT OPTIONS)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Button(
                         onClick = {
-                            pickImagesLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
+                            pickImagesLauncher.launch(arrayOf("image/*"))
                         },
                         modifier = Modifier.weight(1f),
                         enabled = !uiState.isLoading
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -319,7 +328,7 @@ fun ImageOptimizerScreen(
                         enabled = !uiState.isLoading
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -331,107 +340,13 @@ fun ImageOptimizerScreen(
                     }
                 }
 
-                // Folder Import Settings Options Card
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "Folder Import Settings",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Checkbox(
-                                checked = uiState.readNestedFolders,
-                                onCheckedChange = { viewModel.updateReadNestedFolders(it) },
-                                enabled = !uiState.isLoading
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Read nested subfolders",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    text = "Recursively scan all subdirectories inside selected folders.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "Supported Image Types",
-                            style = MaterialTheme.typography.titleSmall
-                        )
-
-                        FolderImageSelectionMode.entries.forEach { mode ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                RadioButton(
-                                    selected = uiState.folderImageSelectionMode == mode,
-                                    onClick = { viewModel.updateFolderImageSelectionMode(mode) },
-                                    enabled = !uiState.isLoading
-                                )
-                                Text(
-                                    text = mode.displayName,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        }
-
-                        if (uiState.folderImageSelectionMode == FolderImageSelectionMode.CUSTOM) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, top = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                SupportedImageFormat.entries.forEach { format ->
-                                    val isChecked = uiState.customSupportedFormats.contains(format)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Checkbox(
-                                            checked = isChecked,
-                                            onCheckedChange = { enabled ->
-                                                viewModel.toggleCustomSupportedFormat(
-                                                    format,
-                                                    enabled
-                                                )
-                                            },
-                                            enabled = !uiState.isLoading
-                                        )
-                                        Text(
-                                            text = format.displayName,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 if (uiState.isLoading) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                // Overall Selection Summary Card & Pie Chart (displayed when images selected)
+                // Selected Images Summary Card & Chart
                 if (uiState.selectedImages.isNotEmpty()) {
                     val totalBytes = uiState.selectedImages.sumOf { it.sizeBytes ?: 0L }
                     val totalSizeStr = formatFileSize(if (totalBytes > 0) totalBytes else null)
@@ -444,24 +359,13 @@ fun ImageOptimizerScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            if (uiState.selectedFolderName != null) {
-                                Text(
-                                    text = if (uiState.selectedFolders.size > 1)
-                                        "${uiState.selectedFolders.size} Folders: ${uiState.selectedFolders.joinToString { it.name }}"
-                                    else
-                                        "Folder: ${uiState.selectedFolderName}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        text = "Count",
+                                        text = "Total Files",
                                         style = MaterialTheme.typography.labelMedium
                                     )
                                     Text(
@@ -481,23 +385,21 @@ fun ImageOptimizerScreen(
                                 }
                             }
 
-                            // File Types Pie Chart
+                            // Distribution Pie Chart
                             FileTypePieChart(images = uiState.selectedImages)
                         }
                     }
-                }
 
-                // Header and Queue List or Empty State
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Selected Queue (${uiState.selectedImages.size})",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    if (uiState.selectedImages.isNotEmpty()) {
+                    // Selected Sources Overview (FOLDERS + DIRECT FILES)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Selected Sources",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                         OutlinedButton(
                             onClick = { viewModel.clearImages() },
                             enabled = !uiState.isLoading
@@ -505,22 +407,123 @@ fun ImageOptimizerScreen(
                             Text(text = "Clear All")
                         }
                     }
-                }
 
-                if (uiState.selectedImages.isNotEmpty()) {
-                    // Queue list bounded to max ~10 items long and scrollable
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 400.dp),
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(uiState.selectedImages, key = { it.uri.toString() }) { item ->
-                            ImageQueueItemCard(
-                                item = item,
-                                onRemove = { viewModel.removeImage(item.uri) },
-                                enabled = true
-                            )
+                        // Render card for each selected folder
+                        uiState.selectedFolders.forEach { folder ->
+                            val folderImages =
+                                uiState.selectedImages.filter { it.sourceFolderUri == folder.uri }
+                            val folderBytes = folderImages.sumOf { it.sizeBytes ?: 0L }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FolderOpen,
+                                            contentDescription = null
+                                        )
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = folder.name,
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                            Text(
+                                                text = "${folderImages.size} files • ${
+                                                    formatFileSize(
+                                                        if (folderBytes > 0) folderBytes else null
+                                                    )
+                                                }",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = { viewModel.removeFolder(folder.uri) },
+                                        enabled = !uiState.isLoading
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove folder"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Render card for direct image selections
+                        val directImages =
+                            uiState.selectedImages.filter { it.sourceFolderUri == null }
+                        if (directImages.isNotEmpty()) {
+                            val directBytes = directImages.sumOf { it.sizeBytes ?: 0L }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhotoLibrary,
+                                            contentDescription = null
+                                        )
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Direct Image Selection",
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                            Text(
+                                                text = "${directImages.size} files • ${
+                                                    formatFileSize(
+                                                        if (directBytes > 0) directBytes else null
+                                                    )
+                                                }",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = { viewModel.removeDirectImages() },
+                                        enabled = !uiState.isLoading
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove direct files"
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -532,136 +535,12 @@ fun ImageOptimizerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = if (uiState.isLoading) "Loading selection..." else "No images selected yet.\nTap 'Select Images' or 'Select Folder' to begin.",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = if (uiState.isLoading) "Loading images..." else "No images selected yet.",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun FileTypePieChart(
-    images: List<ImageItem>,
-    modifier: Modifier = Modifier
-) {
-    if (images.isEmpty()) return
-
-    val typeCounts = images.groupingBy { item ->
-        val mime = item.mimeType?.lowercase() ?: ""
-        val name = item.name?.lowercase() ?: ""
-        when {
-            mime.contains("jpeg") || name.endsWith(".jpg") || name.endsWith(".jpeg") -> "JPEG"
-            mime.contains("png") || name.endsWith(".png") -> "PNG"
-            mime.contains("webp") || name.endsWith(".webp") -> "WebP"
-            else -> "Other"
-        }
-    }.eachCount()
-
-    val total = images.size.toFloat()
-    val colors = listOf(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.tertiary,
-        MaterialTheme.colorScheme.outline
-    )
-
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .padding(4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                var startAngle = 0f
-                typeCounts.entries.forEachIndexed { index, entry ->
-                    val sweepAngle = (entry.value / total) * 360f
-                    val color = colors[index % colors.size]
-                    drawArc(
-                        color = color,
-                        startAngle = startAngle,
-                        sweepAngle = sweepAngle,
-                        useCenter = true
-                    )
-                    startAngle += sweepAngle
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            typeCounts.entries.forEachIndexed { index, entry ->
-                val color = colors[index % colors.size]
-                val percentage = (entry.value * 100) / images.size
-                Row(
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(color, shape = CircleShape)
-                    )
-                    Text(
-                        text = "${entry.key}: ${entry.value} ($percentage%)",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ImageQueueItemCard(
-    item: ImageItem,
-    onRemove: () -> Unit,
-    enabled: Boolean = true
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = item.name ?: "Image",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                val sizeStr = formatFileSize(item.sizeBytes)
-                val typeStr = item.mimeType ?: "Unknown type"
-                Text(
-                    text = "$typeStr • $sizeStr",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            IconButton(onClick = onRemove, enabled = enabled) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Remove image"
-                )
             }
         }
     }

@@ -96,7 +96,8 @@ class ImageOptimizerViewModel @Inject constructor(
                         ImageItem(
                             uri = item.originalUri.toUri(),
                             name = item.name,
-                            sizeBytes = if (item.originalBytes > 0) item.originalBytes else null
+                            sizeBytes = if (item.originalBytes > 0) item.originalBytes else null,
+                            sourceFolderName = job.sourceFolderName
                         )
 
                     val results =
@@ -563,6 +564,39 @@ class ImageOptimizerViewModel @Inject constructor(
                     }
                 )
             }
+        }
+    }
+
+    fun removeFolder(folderUri: Uri) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { currentState ->
+            val updatedImages = currentState.selectedImages.filter { it.sourceFolderUri != folderUri }
+            val updatedFolders = currentState.selectedFolders.filter { it.uri != folderUri }
+            val folderNameSummary = when {
+                updatedFolders.isEmpty() -> null
+                updatedFolders.size == 1 -> updatedFolders.first().name
+                else -> "${updatedFolders.size} Folders (${updatedFolders.joinToString { it.name }})"
+            }
+            currentState.copy(
+                selectedFolders = updatedFolders,
+                selectedFolderUri = updatedFolders.lastOrNull()?.uri,
+                selectedFolderName = folderNameSummary,
+                selectedImages = updatedImages,
+                selectedImagesCount = updatedImages.size,
+                statusMessage = if (updatedImages.isEmpty()) "Ready to select images" else "Selected ${updatedImages.size} image(s)"
+            )
+        }
+    }
+
+    fun removeDirectImages() {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { currentState ->
+            val updatedImages = currentState.selectedImages.filter { it.sourceFolderUri != null }
+            currentState.copy(
+                selectedImages = updatedImages,
+                selectedImagesCount = updatedImages.size,
+                statusMessage = if (updatedImages.isEmpty()) "Ready to select images" else "Selected ${updatedImages.size} image(s)"
+            )
         }
     }
 
