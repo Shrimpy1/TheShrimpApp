@@ -14,6 +14,7 @@ import javax.inject.Singleton
 object BatchModule {
     @Provides @Singleton fun database(@ApplicationContext context: Context): BatchDatabase =
         Room.databaseBuilder(context, BatchDatabase::class.java, "batches.db")
+            .addMigrations(MIGRATION_5_6)
             .fallbackToDestructiveMigration(true)
             .build()
     @Provides fun dao(database: BatchDatabase): BatchDao = database.batches()

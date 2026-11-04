@@ -46,12 +46,21 @@ data class BatchJob(
     val customSupportedFormats: String = com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat.entries.joinToString(",") { it.name },
     val filterByFileSize: Boolean = false,
     val minFileSizeMbInput: String = "",
-    val maxFileSizeMbInput: String = ""
+    val maxFileSizeMbInput: String = "",
+    val postOptimizationPolicy: String = com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy.SKIP.name
 ) {
-    fun options() = ImageProcessingOptions(
-        ProcessingMode.valueOf(mode), dimension, keepOriginal,
-        OutputFormat.valueOf(format), quality, Color(background.toULong()), preserveMetadata
-    )
+    fun options(): ImageProcessingOptions {
+        val policy = try {
+            com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy.valueOf(postOptimizationPolicy)
+        } catch (_: Exception) {
+            com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy.TRY_LOSSLESS
+        }
+        return ImageProcessingOptions(
+            ProcessingMode.valueOf(mode), dimension, keepOriginal,
+            OutputFormat.valueOf(format), quality, Color(background.toULong()), preserveMetadata,
+            policy
+        )
+    }
 
     fun customFormatsSet(): Set<com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat> {
         if (customSupportedFormats.isBlank()) return emptySet()
@@ -149,7 +158,13 @@ interface BatchDao {
     }
 }
 
-@Database(entities = [BatchJob::class, BatchItem::class], version = 5, exportSchema = false)
+val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+    override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE batch_jobs ADD COLUMN postOptimizationPolicy TEXT NOT NULL DEFAULT 'TRY_LOSSLESS'")
+    }
+}
+
+@Database(entities = [BatchJob::class, BatchItem::class], version = 6, exportSchema = false)
 abstract class BatchDatabase : RoomDatabase() {
     abstract fun batches(): BatchDao
 }

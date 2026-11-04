@@ -232,39 +232,41 @@ class DefaultImageProcessor @Inject constructor(
                 return@withContext ImageProcessingResult.Failed("Failed to encode image output.")
             }
 
-            // 9. Lossless post-optimization stage on final encoded candidate
+            // 9. Lossless post-optimization stage on final encoded candidate (if TRY_LOSSLESS policy is selected)
             var winningFile = tempCandidateFile
-            val postOptResult = PerformanceTracker.trackStage(PerformanceStage.POST_OPTIMIZATION) {
-                try {
-                    losslessImageOptimizer.optimize(
-                        Uri.fromFile(tempCandidateFile),
-                        Uri.fromFile(tempPostOptFile),
-                        options
-                    )
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    null // Keep the valid encoded candidate if optional post-optimization fails.
+            if (options.postOptimizationPolicy == com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy.TRY_LOSSLESS) {
+                val postOptResult = PerformanceTracker.trackStage(PerformanceStage.POST_OPTIMIZATION) {
+                    try {
+                        losslessImageOptimizer.optimize(
+                            Uri.fromFile(tempCandidateFile),
+                            Uri.fromFile(tempPostOptFile),
+                            options
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null // Keep the valid encoded candidate if optional post-optimization fails.
+                    }
                 }
-            }
 
-            if (postOptResult is ImageOptimizationResult.Optimized) {
-                val postOptSize = tempPostOptFile.length()
-                if (postOptSize > 0 && postOptSize < preOptSize) {
-                    winningFile = tempPostOptFile
+                if (postOptResult is ImageOptimizationResult.Optimized) {
+                    val postOptSize = tempPostOptFile.length()
+                    if (postOptSize > 0 && postOptSize < preOptSize) {
+                        winningFile = tempPostOptFile
+                    }
                 }
-            }
 
-            // If winningFile is post-optimized file, ensure metadata is applied/retained
-            if (winningFile !== tempCandidateFile) {
-                PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
-                    applyExifMetadata(
-                        metadata,
-                        winningFile,
-                        targetWidth,
-                        targetHeight,
-                        options.preserveMetadata
-                    )
+                // If winningFile is post-optimized file, ensure metadata is applied/retained
+                if (winningFile !== tempCandidateFile) {
+                    PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
+                        applyExifMetadata(
+                            metadata,
+                            winningFile,
+                            targetWidth,
+                            targetHeight,
+                            options.preserveMetadata
+                        )
+                    }
                 }
             }
 

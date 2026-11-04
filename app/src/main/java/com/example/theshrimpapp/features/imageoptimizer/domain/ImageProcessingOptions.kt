@@ -7,6 +7,11 @@ enum class ProcessingMode(val displayName: String) {
     REDUCE_SIZE("Resize & Convert")
 }
 
+enum class PostOptimizationPolicy(val displayName: String) {
+    SKIP("Faster processing"),
+    TRY_LOSSLESS("Try further size reduction")
+}
+
 enum class OutputDestinationMode(val displayName: String) {
     REPLACE_ORIGINAL("Replace original"),
     SUBFOLDER("Subfolder in source folder"),
@@ -42,7 +47,8 @@ data class ImageProcessingOptions(
     val outputFormat: OutputFormat = OutputFormat.WEBP_LOSSY,
     val quality: Int = ImageOptimizerDefaults.DEFAULT_QUALITY,
     val backgroundColor: Color = Color.White,
-    val preserveMetadata: Boolean = true
+    val preserveMetadata: Boolean = true,
+    val postOptimizationPolicy: PostOptimizationPolicy = PostOptimizationPolicy.SKIP
 ) {
     fun isValid(): Boolean {
         return when (processingMode) {

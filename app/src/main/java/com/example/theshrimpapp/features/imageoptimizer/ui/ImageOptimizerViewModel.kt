@@ -20,6 +20,7 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOp
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy
 import com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -280,6 +281,7 @@ class ImageOptimizerViewModel @Inject constructor(
                             outputFormat = if (restoreJob) job.options().outputFormat else current.outputFormat,
                             quality = if (restoreJob) job.quality else current.quality,
                             preserveMetadata = if (restoreJob) job.preserveMetadata else current.preserveMetadata,
+                            postOptimizationPolicy = if (restoreJob) job.options().postOptimizationPolicy else current.postOptimizationPolicy,
                             outputFolderUri = if (restoreJob) job.outputTree?.let(Uri::parse) else current.outputFolderUri,
                             outputFolderName = if (restoreJob && job.outputTree != null) resolvedOutputFolderName else current.outputFolderName,
                             selectedFolderUri = if (shouldWipeSelection) null else if (restoreJob) job.sourceTree?.let(
@@ -856,6 +858,11 @@ class ImageOptimizerViewModel @Inject constructor(
         _uiState.update { it.copy(preserveMetadata = preserve) }
     }
 
+    fun updatePostOptimizationPolicy(policy: PostOptimizationPolicy) {
+        if (_uiState.value.isProcessing) return
+        _uiState.update { it.copy(postOptimizationPolicy = policy) }
+    }
+
     fun getProcessingOptions(): ImageProcessingOptions? {
         val state = _uiState.value
         val options = ImageProcessingOptions(
@@ -865,7 +872,8 @@ class ImageOptimizerViewModel @Inject constructor(
             outputFormat = state.outputFormat,
             quality = state.quality,
             backgroundColor = state.jpegBackgroundColor.color,
-            preserveMetadata = state.preserveMetadata
+            preserveMetadata = state.preserveMetadata,
+            postOptimizationPolicy = state.postOptimizationPolicy
         )
         return if (options.isValid()) options else null
     }

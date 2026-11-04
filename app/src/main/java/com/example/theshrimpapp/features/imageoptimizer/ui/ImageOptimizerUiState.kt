@@ -7,6 +7,7 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
 import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
+import com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy
 
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageOptimizerDefaults
 
@@ -54,6 +55,7 @@ data class ImageOptimizerUiState(
     val quality: Int = ImageOptimizerDefaults.DEFAULT_QUALITY,
     val jpegBackgroundColor: JpegBackgroundColor = JpegBackgroundColor.WHITE,
     val preserveMetadata: Boolean = true,
+    val postOptimizationPolicy: PostOptimizationPolicy = PostOptimizationPolicy.SKIP,
     val optionsError: String? = null,
     val isProcessing: Boolean = false,
     val batchJobId: String? = null,

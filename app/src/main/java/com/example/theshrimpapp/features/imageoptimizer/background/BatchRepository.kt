@@ -116,7 +116,8 @@ class BatchRepository @Inject constructor(
                 customSupportedFormats = customSupportedFormats.joinToString(",") { it.name },
                 filterByFileSize = filterByFileSize,
                 minFileSizeMbInput = minFileSizeMbInput,
-                maxFileSizeMbInput = maxFileSizeMbInput
+                maxFileSizeMbInput = maxFileSizeMbInput,
+                postOptimizationPolicy = options.postOptimizationPolicy.name
             )
             var stored = false
             try {

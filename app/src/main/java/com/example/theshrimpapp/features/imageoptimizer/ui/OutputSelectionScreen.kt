@@ -59,6 +59,7 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundCol
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.PostOptimizationPolicy
 
 @Composable
 fun OutputSelectionScreen(
@@ -77,6 +78,7 @@ fun OutputSelectionScreen(
     var isDimensionExpanded by remember { mutableStateOf(false) }
     var isQualityExpanded by remember { mutableStateOf(false) }
     var isBackgroundExpanded by remember { mutableStateOf(false) }
+    var isPostOptimizationExpanded by remember { mutableStateOf(false) }
     var isAdvancedOptionsExpanded by remember { mutableStateOf(false) }
 
     val notificationPermission = rememberLauncherForActivityResult(
@@ -442,7 +444,51 @@ fun OutputSelectionScreen(
                         }
                     }
 
-                    // 5. Concurrency & Metadata Dropdown
+                    // 5. Processing Speed Policy Dropdown
+                    DropdownSection(
+                        title = "Processing Speed Policy",
+                        subtitle = when (uiState.postOptimizationPolicy) {
+                            PostOptimizationPolicy.SKIP -> "Faster processing"
+                            PostOptimizationPolicy.TRY_LOSSLESS -> "Try further size reduction"
+                        },
+                        icon = Icons.Default.Tune,
+                        expanded = isPostOptimizationExpanded,
+                        onExpandedChange = { isPostOptimizationExpanded = it }
+                    ) {
+                        Text(
+                            text = "Choose whether to attempt an additional lossless optimization pass. The second option takes longer and may save no additional bytes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        PostOptimizationPolicy.entries.forEach { policy ->
+                            LabeledRadioButton(
+                                enabled = !uiState.isProcessing,
+                                selected = uiState.postOptimizationPolicy == policy,
+                                onClick = { viewModel.updatePostOptimizationPolicy(policy) }
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = when (policy) {
+                                            PostOptimizationPolicy.SKIP -> "Faster processing"
+                                            PostOptimizationPolicy.TRY_LOSSLESS -> "Try further size reduction"
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = when (policy) {
+                                            PostOptimizationPolicy.SKIP -> "Skips secondary lossless re-compression for maximum batch speed."
+                                            PostOptimizationPolicy.TRY_LOSSLESS -> "Attempts secondary lossless optimization to minimize file size further."
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 6. Concurrency & Metadata Dropdown
                     DropdownSection(
                         title = "Threads & Metadata",
                         subtitle = "${uiState.concurrency} threads • " + if (uiState.preserveMetadata) "EXIF preserved" else "EXIF stripped",
