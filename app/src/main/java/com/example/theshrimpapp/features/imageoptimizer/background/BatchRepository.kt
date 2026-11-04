@@ -68,9 +68,17 @@ class BatchRepository @Inject constructor(
         }
     }
 
-    suspend fun submit(inputs: List<BatchInput>, output: Uri?, source: Uri?, options: ImageProcessingOptions,
+    suspend fun submit(
+        inputs: List<BatchInput>, output: Uri?, source: Uri?, options: ImageProcessingOptions,
         concurrency: Int, sourceFolderName: String? = null, outputFolderName: String? = null,
-        destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER): String = withContext(Dispatchers.IO) {
+        destinationMode: OutputDestinationMode = OutputDestinationMode.SUBFOLDER,
+        readNestedFolders: Boolean = false,
+        folderImageSelectionMode: FolderImageSelectionMode = FolderImageSelectionMode.ALL_SUPPORTED,
+        customSupportedFormats: Set<SupportedImageFormat> = SupportedImageFormat.entries.toSet(),
+        filterByFileSize: Boolean = false,
+        minFileSizeMbInput: String = "",
+        maxFileSizeMbInput: String = ""
+    ): String = withContext(Dispatchers.IO) {
         submission.withLock {
             require(inputs.isNotEmpty() && options.isValid())
             require(concurrency in 1..MAX_BATCH_CONCURRENCY)
@@ -96,12 +104,20 @@ class BatchRepository @Inject constructor(
                 }
             }
             val id = UUID.randomUUID().toString()
-            val job = BatchJob(id = id, outputTree = output?.toString(), sourceTree = source?.toString(),
+            val job = BatchJob(
+                id = id, outputTree = output?.toString(), sourceTree = source?.toString(),
                 sourceFolderName = sourceFolderName, outputFolderName = outputFolderName,
                 concurrency = concurrency, mode = options.processingMode.name, dimension = options.maxDimension,
                 keepOriginal = options.keepOriginalSize, format = options.outputFormat.name, quality = options.quality,
                 background = options.backgroundColor.value.toLong(), preserveMetadata = options.preserveMetadata,
-                destinationMode = destinationMode.name)
+                destinationMode = destinationMode.name,
+                readNestedFolders = readNestedFolders,
+                folderImageSelectionMode = folderImageSelectionMode.name,
+                customSupportedFormats = customSupportedFormats.joinToString(",") { it.name },
+                filterByFileSize = filterByFileSize,
+                minFileSizeMbInput = minFileSizeMbInput,
+                maxFileSizeMbInput = maxFileSizeMbInput
+            )
             var stored = false
             try {
                 val items = inputs.mapIndexed { index, input ->

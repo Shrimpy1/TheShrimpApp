@@ -14,6 +14,8 @@ import com.example.theshrimpapp.features.imageoptimizer.data.SaveImageResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchProgress
 import com.example.theshrimpapp.features.imageoptimizer.domain.BatchStatus
 import com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageOptimizerDefaults
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageOptimizerLimits
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
 import com.example.theshrimpapp.features.imageoptimizer.domain.JpegBackgroundColor
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
@@ -34,12 +36,56 @@ import javax.inject.Inject
 class ImageOptimizerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val outputSaver: ImageOutputSaver,
-    private val batchRepository: com.example.theshrimpapp.features.imageoptimizer.background.BatchRepository
+    private val batchRepository: com.example.theshrimpapp.features.imageoptimizer.background.BatchRepository,
+    private val preferences: com.example.theshrimpapp.features.imageoptimizer.data.ImageOptimizerPreferences
 ) : ViewModel() {
+
+    companion object {
+        /** Maximum image reading/selection limit shared across folder scan and file pickers. */
+        var MAX_FILE_LIMIT: Int
+            get() = ImageOptimizerDefaults.MAX_FILE_LIMIT
+            set(value) { ImageOptimizerDefaults.MAX_FILE_LIMIT = value }
+
+        /** Default max dimension for image resizing (in pixels). */
+        var DEFAULT_MAX_DIMENSION: Int
+            get() = ImageOptimizerDefaults.DEFAULT_MAX_DIMENSION
+            set(value) { ImageOptimizerDefaults.DEFAULT_MAX_DIMENSION = value }
+
+        /** Default compression quality (1-100). */
+        var DEFAULT_QUALITY: Int
+            get() = ImageOptimizerDefaults.DEFAULT_QUALITY
+            set(value) { ImageOptimizerDefaults.DEFAULT_QUALITY = value }
+
+        /** Default parallel processing threads. */
+        var DEFAULT_CONCURRENCY: Int
+            get() = ImageOptimizerDefaults.DEFAULT_CONCURRENCY
+            set(value) { ImageOptimizerDefaults.DEFAULT_CONCURRENCY = value }
+
+        /** Quick preset options for max dimension resizing (in pixels). */
+        var DIMENSION_PRESETS: List<Int>
+            get() = ImageOptimizerDefaults.DIMENSION_PRESETS
+            set(value) { ImageOptimizerDefaults.DIMENSION_PRESETS = value }
+
+        const val MIN_DIMENSION: Int = ImageOptimizerLimits.MIN_DIMENSION
+        const val MAX_DIMENSION: Int = ImageOptimizerLimits.MAX_DIMENSION
+        const val MIN_QUALITY: Int = ImageOptimizerLimits.MIN_QUALITY
+        const val MAX_QUALITY: Int = ImageOptimizerLimits.MAX_QUALITY
+        const val MIN_CONCURRENCY: Int = ImageOptimizerLimits.MIN_CONCURRENCY
+        const val MAX_CONCURRENCY: Int = ImageOptimizerLimits.MAX_CONCURRENCY
+    }
 
     private val contentResolver: ContentResolver get() = context.contentResolver
 
-    private val _uiState = MutableStateFlow(ImageOptimizerUiState())
+    private val _uiState = MutableStateFlow(
+        ImageOptimizerUiState(
+            readNestedFolders = preferences.readNestedFolders,
+            folderImageSelectionMode = preferences.folderImageSelectionMode,
+            customSupportedFormats = preferences.customSupportedFormats,
+            filterByFileSize = preferences.filterByFileSize,
+            minFileSizeMbInput = preferences.minFileSizeMbInput,
+            maxFileSizeMbInput = preferences.maxFileSizeMbInput
+        )
+    )
     val uiState: StateFlow<ImageOptimizerUiState> = _uiState.asStateFlow()
 
     fun updateDestinationMode(mode: com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode) {
@@ -97,7 +143,9 @@ class ImageOptimizerViewModel @Inject constructor(
                             uri = item.originalUri.toUri(),
                             name = item.name,
                             sizeBytes = if (item.originalBytes > 0) item.originalBytes else null,
-                            sourceFolderName = job.sourceFolderName
+                            sourceFolderUri = job.sourceTree?.toUri(),
+                            sourceFolderName = job.sourceFolderName,
+                            parentFolderUri = item.sourceTreeUri?.toUri()
                         )
 
                     val results =
@@ -176,6 +224,22 @@ class ImageOptimizerViewModel @Inject constructor(
                             else -> null
                         }
 
+                        val restoredSelectionMode = try {
+                            FolderImageSelectionMode.valueOf(job.folderImageSelectionMode)
+                        } catch (_: Exception) {
+                            FolderImageSelectionMode.ALL_SUPPORTED
+                        }
+                        val restoredCustomFormats = job.customFormatsSet()
+
+                        if (restoreJob) {
+                            preferences.readNestedFolders = job.readNestedFolders
+                            preferences.folderImageSelectionMode = restoredSelectionMode
+                            preferences.customSupportedFormats = restoredCustomFormats
+                            preferences.filterByFileSize = job.filterByFileSize
+                            preferences.minFileSizeMbInput = job.minFileSizeMbInput
+                            preferences.maxFileSizeMbInput = job.maxFileSizeMbInput
+                        }
+
                         current.copy(
                             batch = progress, batchJobId = job.id,
                             isProcessing = progress.isActive,
@@ -195,6 +259,12 @@ class ImageOptimizerViewModel @Inject constructor(
                                 shouldWipeSelection -> emptyList()
                                 else -> current.selectedFolders
                             },
+                            readNestedFolders = if (restoreJob) job.readNestedFolders else current.readNestedFolders,
+                            folderImageSelectionMode = if (restoreJob) restoredSelectionMode else current.folderImageSelectionMode,
+                            customSupportedFormats = if (restoreJob) restoredCustomFormats else current.customSupportedFormats,
+                            filterByFileSize = if (restoreJob) job.filterByFileSize else current.filterByFileSize,
+                            minFileSizeMbInput = if (restoreJob) job.minFileSizeMbInput else current.minFileSizeMbInput,
+                            maxFileSizeMbInput = if (restoreJob) job.maxFileSizeMbInput else current.maxFileSizeMbInput,
                             concurrency = job.concurrency,
                             destinationMode = if (restoreJob) try {
                                 com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode.valueOf(
@@ -284,7 +354,7 @@ class ImageOptimizerViewModel @Inject constructor(
                             it.uri,
                             it.name,
                             it.sizeBytes,
-                            it.sourceFolderUri
+                            it.parentFolderUri ?: it.sourceFolderUri
                         )
                     },
                     output = state.outputFolderUri,
@@ -293,7 +363,13 @@ class ImageOptimizerViewModel @Inject constructor(
                     concurrency = state.concurrency,
                     sourceFolderName = state.selectedFolderName,
                     outputFolderName = state.outputFolderName,
-                    destinationMode = state.destinationMode
+                    destinationMode = state.destinationMode,
+                    readNestedFolders = state.readNestedFolders,
+                    folderImageSelectionMode = state.folderImageSelectionMode,
+                    customSupportedFormats = state.customSupportedFormats,
+                    filterByFileSize = state.filterByFileSize,
+                    minFileSizeMbInput = state.minFileSizeMbInput,
+                    maxFileSizeMbInput = state.maxFileSizeMbInput
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -337,11 +413,13 @@ class ImageOptimizerViewModel @Inject constructor(
 
     fun updateReadNestedFolders(readNested: Boolean) {
         if (_uiState.value.isProcessing) return
+        preferences.readNestedFolders = readNested
         _uiState.update { it.copy(readNestedFolders = readNested) }
     }
 
     fun updateFolderImageSelectionMode(mode: FolderImageSelectionMode) {
         if (_uiState.value.isProcessing) return
+        preferences.folderImageSelectionMode = mode
         _uiState.update { it.copy(folderImageSelectionMode = mode) }
     }
 
@@ -353,7 +431,30 @@ class ImageOptimizerViewModel @Inject constructor(
             } else {
                 state.customSupportedFormats - format
             }
+            preferences.customSupportedFormats = updated
             state.copy(customSupportedFormats = updated)
+        }
+    }
+
+    fun updateFilterByFileSize(enabled: Boolean) {
+        if (_uiState.value.isProcessing) return
+        preferences.filterByFileSize = enabled
+        _uiState.update { it.copy(filterByFileSize = enabled) }
+    }
+
+    fun updateMinFileSizeInput(input: String) {
+        if (_uiState.value.isProcessing) return
+        if (input.isEmpty() || input.toDoubleOrNull() != null || input == ".") {
+            preferences.minFileSizeMbInput = input
+            _uiState.update { it.copy(minFileSizeMbInput = input) }
+        }
+    }
+
+    fun updateMaxFileSizeInput(input: String) {
+        if (_uiState.value.isProcessing) return
+        if (input.isEmpty() || input.toDoubleOrNull() != null || input == ".") {
+            preferences.maxFileSizeMbInput = input
+            _uiState.update { it.copy(maxFileSizeMbInput = input) }
         }
     }
 
@@ -379,6 +480,21 @@ class ImageOptimizerViewModel @Inject constructor(
         }
     }
 
+    private fun isFileSizeMatching(
+        sizeBytes: Long,
+        filterByFileSize: Boolean,
+        minFileSizeMb: Double?,
+        maxFileSizeMb: Double?
+    ): Boolean {
+        if (!filterByFileSize) return true
+        val minBytes = minFileSizeMb?.let { (it * 1024 * 1024).toLong() }
+        val maxBytes = maxFileSizeMb?.let { (it * 1024 * 1024).toLong() }
+
+        if (minBytes != null && sizeBytes < minBytes) return false
+        if (maxBytes != null && sizeBytes > maxBytes) return false
+        return true
+    }
+
     private fun scanDirectory(
         rootDoc: DocumentFile,
         rootUri: Uri,
@@ -386,7 +502,10 @@ class ImageOptimizerViewModel @Inject constructor(
         readNested: Boolean,
         selectionMode: FolderImageSelectionMode,
         customFormats: Set<SupportedImageFormat>,
-        maxLimit: Int = 4000
+        filterByFileSize: Boolean = false,
+        minFileSizeMb: Double? = null,
+        maxFileSizeMb: Double? = null,
+        maxLimit: Int = MAX_FILE_LIMIT
     ): List<ImageItem> {
         val result = mutableListOf<ImageItem>()
         val dirQueue = ArrayDeque<DocumentFile>()
@@ -403,8 +522,10 @@ class ImageOptimizerViewModel @Inject constructor(
                 } else if (file.isFile) {
                     val name = file.name ?: "Unknown"
                     val mimeType = file.type
-                    if (isFileFormatMatching(name, mimeType, selectionMode, customFormats)) {
-                        val size = file.length()
+                    val size = file.length()
+                    if (isFileFormatMatching(name, mimeType, selectionMode, customFormats) &&
+                        isFileSizeMatching(size, filterByFileSize, minFileSizeMb, maxFileSizeMb)
+                    ) {
                         result.add(
                             ImageItem(
                                 uri = file.uri,
@@ -412,7 +533,8 @@ class ImageOptimizerViewModel @Inject constructor(
                                 sizeBytes = if (size > 0) size else null,
                                 mimeType = mimeType ?: "image/*",
                                 sourceFolderUri = rootUri,
-                                sourceFolderName = folderName
+                                sourceFolderName = folderName,
+                                parentFolderUri = currentDir.uri
                             )
                         )
                         if (result.size >= maxLimit) break
@@ -452,6 +574,10 @@ class ImageOptimizerViewModel @Inject constructor(
                 val readNested = currentState.readNestedFolders
                 val selectionMode = currentState.folderImageSelectionMode
                 val customFormats = currentState.customSupportedFormats
+                val filterByFileSize = currentState.filterByFileSize
+                val minFileSizeMb = currentState.minFileSizeMbInput.toDoubleOrNull()
+                val maxFileSizeMb = currentState.maxFileSizeMbInput.toDoubleOrNull()
+                val limit = MAX_FILE_LIMIT
 
                 val imageItems = scanDirectory(
                     rootDoc = docFile,
@@ -459,22 +585,29 @@ class ImageOptimizerViewModel @Inject constructor(
                     folderName = folderName,
                     readNested = readNested,
                     selectionMode = selectionMode,
-                    customFormats = customFormats
+                    customFormats = customFormats,
+                    filterByFileSize = filterByFileSize,
+                    minFileSizeMb = minFileSizeMb,
+                    maxFileSizeMb = maxFileSizeMb,
+                    maxLimit = limit
                 )
 
                 _uiState.update { state ->
                     val existingUris = state.selectedImages.map { it.uri }.toSet()
                     val uniqueNewItems = imageItems.filter { it.uri !in existingUris }
                     val combined = state.selectedImages + uniqueNewItems
-                    val updatedList = combined.take(2000)
-                    val wasCapped = combined.size > 2000
+                    val updatedList = combined.take(limit)
+                    val wasCapped = combined.size > limit
 
                     val folderObj = SelectedFolder(
                         uri = uri,
                         name = folderName,
                         readNestedFolders = readNested,
                         folderImageSelectionMode = selectionMode,
-                        customSupportedFormats = customFormats
+                        customSupportedFormats = customFormats,
+                        filterByFileSize = filterByFileSize,
+                        minFileSizeMbInput = currentState.minFileSizeMbInput,
+                        maxFileSizeMbInput = currentState.maxFileSizeMbInput
                     )
                     val updatedFolders = if (state.selectedFolders.any { it.uri == uri }) {
                         state.selectedFolders
@@ -496,7 +629,7 @@ class ImageOptimizerViewModel @Inject constructor(
                         selectedImages = updatedList,
                         selectedImagesCount = updatedList.size,
                         statusMessage = if (wasCapped) {
-                            "Loaded folder '$folderName': capped at 2000 files max"
+                            "Loaded folder '$folderName': capped at $limit files max"
                         } else {
                             "Loaded folder '$folderName': found ${imageItems.size} supported image(s) (${updatedList.size} total across ${updatedFolders.size} folder(s))"
                         }
@@ -546,17 +679,18 @@ class ImageOptimizerViewModel @Inject constructor(
             }
 
             _uiState.update { currentState ->
+                val limit = MAX_FILE_LIMIT
                 val existingUris = currentState.selectedImages.map { it.uri }.toSet()
                 val uniqueNewItems = newItems.filter { it.uri !in existingUris }
                 val combined = currentState.selectedImages + uniqueNewItems
-                val updatedList = combined.take(2000)
-                val wasCapped = combined.size > 2000
+                val updatedList = combined.take(limit)
+                val wasCapped = combined.size > limit
                 currentState.copy(
                     isLoading = false,
                     selectedImages = updatedList,
                     selectedImagesCount = updatedList.size,
                     statusMessage = if (wasCapped) {
-                        "Selected ${updatedList.size} images (maximum 2000 allowed)"
+                        "Selected ${updatedList.size} images (maximum $limit allowed)"
                     } else if (updatedList.isEmpty()) {
                         "Ready to select images"
                     } else {
@@ -570,7 +704,8 @@ class ImageOptimizerViewModel @Inject constructor(
     fun removeFolder(folderUri: Uri) {
         if (_uiState.value.isProcessing) return
         _uiState.update { currentState ->
-            val updatedImages = currentState.selectedImages.filter { it.sourceFolderUri != folderUri }
+            val updatedImages =
+                currentState.selectedImages.filter { it.sourceFolderUri != folderUri }
             val updatedFolders = currentState.selectedFolders.filter { it.uri != folderUri }
             val folderNameSummary = when {
                 updatedFolders.isEmpty() -> null
@@ -650,7 +785,7 @@ class ImageOptimizerViewModel @Inject constructor(
 
     fun updateMaxDimension(dimension: Int) {
         if (_uiState.value.isProcessing) return
-        val clamped = dimension.coerceIn(1, 10000)
+        val clamped = dimension.coerceIn(MIN_DIMENSION, MAX_DIMENSION)
         _uiState.update {
             it.copy(
                 maxDimension = clamped,
@@ -664,7 +799,7 @@ class ImageOptimizerViewModel @Inject constructor(
     fun updateMaxDimensionInput(input: String) {
         if (_uiState.value.isProcessing) return
         val parsed = input.toIntOrNull()
-        if (parsed != null && parsed in 1..10000) {
+        if (parsed != null && parsed in MIN_DIMENSION..MAX_DIMENSION) {
             _uiState.update {
                 it.copy(
                     maxDimension = parsed,
@@ -678,7 +813,7 @@ class ImageOptimizerViewModel @Inject constructor(
                 it.copy(
                     maxDimensionInput = input,
                     keepOriginalSize = false,
-                    optionsError = "Max dimension must be between 1 and 10,000 px"
+                    optionsError = ImageOptimizerLimits.MAX_DIMENSION_ERROR_MESSAGE
                 )
             }
         }
@@ -694,16 +829,16 @@ class ImageOptimizerViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 keepOriginalSize = keep, optionsError = if (keep ||
-                    it.maxDimensionInput.toIntOrNull() in 1..10000
+                    it.maxDimensionInput.toIntOrNull() in MIN_DIMENSION..MAX_DIMENSION
                 ) null
-                else "Max dimension must be between 1 and 10,000 px"
+                else ImageOptimizerLimits.MAX_DIMENSION_ERROR_MESSAGE
             )
         }
     }
 
     fun updateQuality(quality: Int) {
         if (_uiState.value.isProcessing) return
-        val clamped = quality.coerceIn(1, 100)
+        val clamped = quality.coerceIn(MIN_QUALITY, MAX_QUALITY)
         _uiState.update {
             it.copy(
                 quality = clamped

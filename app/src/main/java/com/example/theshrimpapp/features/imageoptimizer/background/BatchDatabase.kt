@@ -40,12 +40,29 @@ data class BatchJob(
     val background: Long = Color.White.value.toLong(),
     val preserveMetadata: Boolean = true,
     val destinationMode: String = OutputDestinationMode.SUBFOLDER.name,
-    val error: String? = null
+    val error: String? = null,
+    val readNestedFolders: Boolean = false,
+    val folderImageSelectionMode: String = com.example.theshrimpapp.features.imageoptimizer.domain.FolderImageSelectionMode.ALL_SUPPORTED.name,
+    val customSupportedFormats: String = com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat.entries.joinToString(",") { it.name },
+    val filterByFileSize: Boolean = false,
+    val minFileSizeMbInput: String = "",
+    val maxFileSizeMbInput: String = ""
 ) {
     fun options() = ImageProcessingOptions(
         ProcessingMode.valueOf(mode), dimension, keepOriginal,
         OutputFormat.valueOf(format), quality, Color(background.toULong()), preserveMetadata
     )
+
+    fun customFormatsSet(): Set<com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat> {
+        if (customSupportedFormats.isBlank()) return emptySet()
+        return customSupportedFormats.split(",").mapNotNull { name ->
+            try {
+                com.example.theshrimpapp.features.imageoptimizer.domain.SupportedImageFormat.valueOf(name.trim())
+            } catch (_: Exception) {
+                null
+            }
+        }.toSet()
+    }
 }
 
 @Entity(
@@ -132,7 +149,7 @@ interface BatchDao {
     }
 }
 
-@Database(entities = [BatchJob::class, BatchItem::class], version = 4, exportSchema = false)
+@Database(entities = [BatchJob::class, BatchItem::class], version = 5, exportSchema = false)
 abstract class BatchDatabase : RoomDatabase() {
     abstract fun batches(): BatchDao
 }

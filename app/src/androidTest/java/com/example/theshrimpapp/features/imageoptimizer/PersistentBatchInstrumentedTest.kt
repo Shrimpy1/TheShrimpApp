@@ -158,4 +158,37 @@ class PersistentBatchInstrumentedTest {
         assertEquals(ListenableWorker.Result.success(), worker().doWork())
         assertEquals("SAVED", repository.dao.items(id).single().state)
     }
+
+    @Test fun replaceOriginalInNestedFolderPutsNewFileInNestedFolder() = runBlocking {
+        val nestedFolder = File(root, "subfolder").apply { mkdirs() }
+        val nestedInput = File(nestedFolder, "photo.png").apply { writeBytes(ByteArray(20) { 9 }) }
+        val nestedFolderUri = "content://com.example.theshrimpapp.test.save/tree/root/document/subfolder"
+        val nestedFileUri = "content://com.example.theshrimpapp.test.save/tree/root/document/subfolder/photo.png"
+
+        val job = BatchJob(
+            id,
+            sourceTree = tree.toString(),
+            destinationMode = OutputDestinationMode.REPLACE_ORIGINAL.name,
+            format = OutputFormat.WEBP_LOSSLESS.name
+        )
+        val item = BatchItem(
+            id,
+            0,
+            nestedFileUri,
+            "photo.png",
+            sourceTreeUri = nestedFolderUri,
+            originalBytes = 20
+        )
+        repository.dao.create(job, listOf(item))
+
+        assertEquals(ListenableWorker.Result.success(), worker().doWork())
+
+        assertFalse("Original png in nested folder should be removed when converted to webp", nestedInput.exists())
+        val outputInNested = File(nestedFolder, "photo.webp")
+        assertTrue("Output webp should be created in nested folder", outputInNested.exists())
+        assertArrayEquals(payload, outputInNested.readBytes())
+
+        val rootOutput = File(root, "photo.webp")
+        assertFalse("Output webp must not be placed in parent root folder", rootOutput.exists())
+    }
 }
