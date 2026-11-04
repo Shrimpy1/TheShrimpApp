@@ -8,6 +8,7 @@ import android.content.pm.ProviderInfo
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
+import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,23 +16,38 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
-import androidx.work.workDataOf
 import androidx.work.testing.TestListenableWorkerBuilder
-import com.example.theshrimpapp.features.imageoptimizer.background.*
+import androidx.work.workDataOf
+import com.example.theshrimpapp.features.imageoptimizer.background.BatchDatabase
+import com.example.theshrimpapp.features.imageoptimizer.background.BatchItem
+import com.example.theshrimpapp.features.imageoptimizer.background.BatchJob
+import com.example.theshrimpapp.features.imageoptimizer.background.BatchRepository
+import com.example.theshrimpapp.features.imageoptimizer.background.ImageBatchWorker
+import com.example.theshrimpapp.features.imageoptimizer.background.PersistentImagePublisher
 import com.example.theshrimpapp.features.imageoptimizer.data.DefaultImageProcessor
 import com.example.theshrimpapp.features.imageoptimizer.data.DefaultLosslessImageOptimizer
 import com.example.theshrimpapp.features.imageoptimizer.data.JpegLosslessOptimizer
 import com.example.theshrimpapp.features.imageoptimizer.data.PngLosslessOptimizer
 import com.example.theshrimpapp.features.imageoptimizer.data.WebpLosslessOptimizer
-import com.example.theshrimpapp.features.imageoptimizer.domain.*
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingOptions
+import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessor
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceCounter
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceStage
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceTracker
+import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.UUID
 
 data class FixtureMetadata(
@@ -63,7 +79,8 @@ class ImageOptimizerBenchmarkTest {
     fun setup() {
         context = object : ContextWrapper(targetContext) {
             override fun getContentResolver() = resolver
-            override fun checkCallingOrSelfUriPermission(uri: Uri, modeFlags: Int) = PackageManager.PERMISSION_GRANTED
+            override fun checkCallingOrSelfUriPermission(uri: Uri, modeFlags: Int) =
+                PackageManager.PERMISSION_GRANTED
         }
         provider.attachInfo(context, ProviderInfo().apply {
             authority = tree.authority
@@ -78,7 +95,11 @@ class ImageOptimizerBenchmarkTest {
         corpusDir.mkdirs()
 
         database = Room.databaseBuilder(targetContext, BatchDatabase::class.java, dbName).build()
-        repository = BatchRepository(context, database.batches(), androidx.work.WorkManager.getInstance(targetContext))
+        repository = BatchRepository(
+            context,
+            database.batches(),
+            androidx.work.WorkManager.getInstance(targetContext)
+        )
         PerformanceTracker.reset()
         PerformanceTracker.enabled.set(true)
 
@@ -111,32 +132,103 @@ class ImageOptimizerBenchmarkTest {
             val name = "orient_$idx.jpg"
             val file = File(corpusDir, name)
             createTestImage(file, 1000, 800, Bitmap.CompressFormat.JPEG, orient)
-            manifest.add(FixtureMetadata(name, 1000, 800, "JPEG", orient, false, expectedExifTags = setOf(ExifInterface.TAG_ORIENTATION, ExifInterface.TAG_MAKE)))
+            manifest.add(
+                FixtureMetadata(
+                    name,
+                    1000,
+                    800,
+                    "JPEG",
+                    orient,
+                    false,
+                    expectedExifTags = setOf(ExifInterface.TAG_ORIENTATION, ExifInterface.TAG_MAKE)
+                )
+            )
         }
 
         // 12 MP JPEG photo (4000x3000)
         val name12mp = "photo_12mp.jpg"
         val file12mp = File(corpusDir, name12mp)
-        createTestImage(file12mp, 4000, 3000, Bitmap.CompressFormat.JPEG, ExifInterface.ORIENTATION_NORMAL)
-        manifest.add(FixtureMetadata(name12mp, 4000, 3000, "JPEG", ExifInterface.ORIENTATION_NORMAL, false))
+        createTestImage(
+            file12mp,
+            4000,
+            3000,
+            Bitmap.CompressFormat.JPEG,
+            ExifInterface.ORIENTATION_NORMAL
+        )
+        manifest.add(
+            FixtureMetadata(
+                name12mp,
+                4000,
+                3000,
+                "JPEG",
+                ExifInterface.ORIENTATION_NORMAL,
+                false
+            )
+        )
 
         // Large 24 MP JPEG photo (6000x4000)
         val name24mp = "photo_24mp.jpg"
         val file24mp = File(corpusDir, name24mp)
-        createTestImage(file24mp, 6000, 4000, Bitmap.CompressFormat.JPEG, ExifInterface.ORIENTATION_NORMAL)
-        manifest.add(FixtureMetadata(name24mp, 6000, 4000, "JPEG", ExifInterface.ORIENTATION_NORMAL, false))
+        createTestImage(
+            file24mp,
+            6000,
+            4000,
+            Bitmap.CompressFormat.JPEG,
+            ExifInterface.ORIENTATION_NORMAL
+        )
+        manifest.add(
+            FixtureMetadata(
+                name24mp,
+                6000,
+                4000,
+                "JPEG",
+                ExifInterface.ORIENTATION_NORMAL,
+                false
+            )
+        )
 
         // PNG with alpha
         val alphaName = "alpha_transparent.png"
         val alphaFile = File(corpusDir, alphaName)
-        createTestImage(alphaFile, 1200, 900, Bitmap.CompressFormat.PNG, ExifInterface.ORIENTATION_NORMAL, hasAlpha = true)
-        manifest.add(FixtureMetadata(alphaName, 1200, 900, "PNG", ExifInterface.ORIENTATION_NORMAL, true))
+        createTestImage(
+            alphaFile,
+            1200,
+            900,
+            Bitmap.CompressFormat.PNG,
+            ExifInterface.ORIENTATION_NORMAL,
+            hasAlpha = true
+        )
+        manifest.add(
+            FixtureMetadata(
+                alphaName,
+                1200,
+                900,
+                "PNG",
+                ExifInterface.ORIENTATION_NORMAL,
+                true
+            )
+        )
 
         // Nested folder structure with repeated basenames
         val nestedDir = File(corpusDir, "nested/folder").apply { mkdirs() }
         val nestedFile = File(nestedDir, "photo_12mp.jpg")
-        createTestImage(nestedFile, 2000, 1500, Bitmap.CompressFormat.JPEG, ExifInterface.ORIENTATION_NORMAL)
-        manifest.add(FixtureMetadata("nested/folder/photo_12mp.jpg", 2000, 1500, "JPEG", ExifInterface.ORIENTATION_NORMAL, false))
+        createTestImage(
+            nestedFile,
+            2000,
+            1500,
+            Bitmap.CompressFormat.JPEG,
+            ExifInterface.ORIENTATION_NORMAL
+        )
+        manifest.add(
+            FixtureMetadata(
+                "nested/folder/photo_12mp.jpg",
+                2000,
+                1500,
+                "JPEG",
+                ExifInterface.ORIENTATION_NORMAL,
+                false
+            )
+        )
 
         // Corrupt file input
         val corruptFile = File(corpusDir, "corrupt.jpg")
@@ -187,7 +279,8 @@ class ImageOptimizerBenchmarkTest {
                     appContext: Context,
                     workerClassName: String,
                     workerParameters: WorkerParameters
-                ): ListenableWorker = ImageBatchWorker(appContext, workerParameters, repository, processor, publisher)
+                ): ListenableWorker =
+                    ImageBatchWorker(appContext, workerParameters, repository, processor, publisher)
             }).build()
     }
 
@@ -248,7 +341,10 @@ class ImageOptimizerBenchmarkTest {
                 assertEquals(ListenableWorker.Result.success(), result)
                 val completedItems = repository.dao.items(jobId)
                 val savedCount = completedItems.count { it.state == "SAVED" }
-                assertTrue("Expected saved items > 0 for format $format concurrency $concurrency", savedCount > 0)
+                assertTrue(
+                    "Expected saved items > 0 for format $format concurrency $concurrency",
+                    savedCount > 0
+                )
 
                 val report = PerformanceTracker.generateReport()
                 val wallSec = elapsedMs / 1000.0
@@ -267,14 +363,27 @@ class ImageOptimizerBenchmarkTest {
     }
 
     private fun logAndRecordResult(logMsg: String) {
-        android.util.Log.i("ImageOptimizerBench", logMsg)
+        val tag = "ImageOptimizerBench"
+
+        Log.i(tag, logMsg)
+
         try {
-            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            val reportFile = File(downloadsDir, "benchmark_results.txt")
-            reportFile.appendText("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} | $logMsg\n")
+            val dir = File(targetContext.filesDir, "benchmarks")
+
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw IOException("Failed to create directory: ${dir.absolutePath}")
+            }
+
+            val reportFile = File(dir, "benchmark_results.txt")
+
+            val timestamp = java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss",
+                java.util.Locale.US
+            ).format(java.util.Date())
+
+            reportFile.appendText("$timestamp | $logMsg\n")
         } catch (e: Exception) {
-            android.util.Log.e("ImageOptimizerBench", "Failed to write benchmark file", e)
+            Log.e(tag, "Failed to write benchmark file", e)
         }
     }
 
@@ -317,13 +426,17 @@ class ImageOptimizerBenchmarkTest {
             val report = PerformanceTracker.generateReport()
             val decodeMs = report.stageTotalsMs[PerformanceStage.DECODE] ?: 0
             val encodeMs = report.stageTotalsMs[PerformanceStage.ENCODE] ?: 0
-            android.util.Log.i("ImageOptimizerBench", "KEEP_ORIGINAL=$keepOriginal decodeMs=$decodeMs encodeMs=$encodeMs")
+            Log.i(
+                "ImageOptimizerBench",
+                "KEEP_ORIGINAL=$keepOriginal decodeMs=$decodeMs encodeMs=$encodeMs"
+            )
         }
     }
 
     @Test
     fun testQueryCountGrowthReplacementVsSubfolder() = runBlocking {
-        val destModes = listOf(OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER)
+        val destModes =
+            listOf(OutputDestinationMode.REPLACE_ORIGINAL, OutputDestinationMode.SUBFOLDER)
         val queryCounts = mutableMapOf<OutputDestinationMode, Int>()
 
         for (destMode in destModes) {
@@ -361,9 +474,13 @@ class ImageOptimizerBenchmarkTest {
             val result = buildWorker(jobId, createDefaultProcessor()).doWork()
             assertEquals(ListenableWorker.Result.success(), result)
 
-            val totalQueries = provider.queryChildDocumentsCount.get() + provider.queryDocumentCount.get()
+            val totalQueries =
+                provider.queryChildDocumentsCount.get() + provider.queryDocumentCount.get()
             queryCounts[destMode] = totalQueries
-            android.util.Log.i("ImageOptimizerBench", "QUERY_GROWTH destMode=${destMode.name} items=${items.size} queries=$totalQueries")
+            Log.i(
+                "ImageOptimizerBench",
+                "QUERY_GROWTH destMode=${destMode.name} items=${items.size} queries=$totalQueries"
+            )
         }
 
         assertNotNull(queryCounts[OutputDestinationMode.REPLACE_ORIGINAL])
@@ -405,7 +522,11 @@ class ImageOptimizerBenchmarkTest {
 
         val finalItem = repository.dao.items(jobId).single()
         assertEquals("FAILED", finalItem.state)
-        assertTrue(finalItem.reason?.contains("Write denied") == true || finalItem.reason?.contains("failed") == true)
+        assertTrue(
+            finalItem.reason?.contains("Write denied") == true || finalItem.reason?.contains(
+                "failed"
+            ) == true
+        )
     }
 
     @Test
