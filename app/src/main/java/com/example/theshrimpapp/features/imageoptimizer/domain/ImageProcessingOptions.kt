@@ -37,10 +37,10 @@ enum class JpegBackgroundColor(
 
 data class ImageProcessingOptions(
     val processingMode: ProcessingMode = ProcessingMode.LOSSLESS_OPTIMIZE,
-    val maxDimension: Int = 1920,
+    val maxDimension: Int = ImageOptimizerDefaults.DEFAULT_MAX_DIMENSION,
     val keepOriginalSize: Boolean = false,
     val outputFormat: OutputFormat = OutputFormat.WEBP_LOSSY,
-    val quality: Int = 85,
+    val quality: Int = ImageOptimizerDefaults.DEFAULT_QUALITY,
     val backgroundColor: Color = Color.White,
     val preserveMetadata: Boolean = true
 ) {
@@ -48,8 +48,8 @@ data class ImageProcessingOptions(
         return when (processingMode) {
             ProcessingMode.LOSSLESS_OPTIMIZE -> true
             ProcessingMode.REDUCE_SIZE -> {
-                val dimValid = keepOriginalSize || maxDimension in 1..10000
-                val qualityValid = if (outputFormat.supportsQuality) quality in 1..100 else true
+                val dimValid = keepOriginalSize || (maxDimension in ImageOptimizerLimits.MIN_DIMENSION..ImageOptimizerLimits.MAX_DIMENSION)
+                val qualityValid = !outputFormat.supportsQuality || (quality in ImageOptimizerLimits.MIN_QUALITY..ImageOptimizerLimits.MAX_QUALITY)
                 dimValid && qualityValid
             }
         }
