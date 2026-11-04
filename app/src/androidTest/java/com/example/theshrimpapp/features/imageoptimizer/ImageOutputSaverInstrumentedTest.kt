@@ -27,49 +27,6 @@ import com.example.theshrimpapp.features.imageoptimizer.ui.ImageOptimizerViewMod
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 
-/** Test-only SAF provider with deterministic failure modes; never shipped in the app. */
-class SaveTestDocumentsProvider : DocumentsProvider() {
-    private val root get() = File(requireNotNull(context).cacheDir, "save-provider").apply { mkdirs() }
-    override fun onCreate() = true
-    override fun queryRoots(projection: Array<out String>?): Cursor = MatrixCursor(arrayOf("root_id"))
-    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor = rows(listOf(documentId), projection)
-    override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor =
-        rows(file(parentDocumentId).listFiles().orEmpty().map { it.relativeTo(root).invariantSeparatorsPath }, projection)
-
-    private fun file(id: String) = if (id == "root") root else File(root, id)
-    private fun rows(ids: List<String>, projection: Array<out String>?): Cursor {
-        val columns = projection ?: arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
-            Document.COLUMN_MIME_TYPE, Document.COLUMN_FLAGS, Document.COLUMN_SIZE)
-        val cursor = MatrixCursor(columns)
-        ids.forEach { id ->
-            val f = file(id)
-            val values = mapOf<String, Any>(Document.COLUMN_DOCUMENT_ID to id,
-                Document.COLUMN_DISPLAY_NAME to f.name,
-                Document.COLUMN_MIME_TYPE to if (f.isDirectory) Document.MIME_TYPE_DIR else "image/webp",
-                Document.COLUMN_FLAGS to (Document.FLAG_DIR_SUPPORTS_CREATE or Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE),
-                Document.COLUMN_SIZE to f.length())
-            cursor.addRow(columns.map { values[it] }.toTypedArray())
-        }
-        return cursor
-    }
-    override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
-        if (File(root, "return-source").exists()) return "source.png"
-        val created = File(file(parentDocumentId), displayName)
-        check(!created.exists())
-        if (mimeType == Document.MIME_TYPE_DIR) check(created.mkdir()) else check(created.createNewFile())
-        return created.relativeTo(root).invariantSeparatorsPath
-    }
-    override fun deleteDocument(documentId: String) { check(file(documentId).delete()) }
-    override fun isChildDocument(parentDocumentId: String, documentId: String) =
-        file(documentId).canonicalPath.startsWith(file(parentDocumentId).canonicalPath + File.separator)
-    override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
-        if (mode.contains('w') && File(root, "deny-write").exists()) throw java.io.IOException("Write denied")
-        // Corruption on reopen simulates a provider accepting an incomplete write.
-        if (mode == "r" && File(root, "corrupt-read").exists()) file(documentId).writeBytes(byteArrayOf(0))
-        return ParcelFileDescriptor.open(file(documentId), ParcelFileDescriptor.parseMode(mode))
-    }
-}
-
 @RunWith(AndroidJUnit4::class)
 class ImageOutputSaverInstrumentedTest {
     private val targetContext = InstrumentationRegistry.getInstrumentation().targetContext

@@ -6,6 +6,9 @@ import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputDestinationMode
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceCounter
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceStage
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceTracker
 import com.example.theshrimpapp.features.imageoptimizer.domain.optimizedOutputName
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -157,7 +160,10 @@ class PersistentImagePublisher @Inject constructor(
             }
 
             var checkpoint = item
-            val output = creation.withLock {
+            val output = PerformanceTracker.trackStage(PerformanceStage.LOCK_WAIT) {
+                PerformanceTracker.incrementCounter(PerformanceCounter.LOCK_WAITS)
+                creation
+            }.withLock {
                 val treeUriStr = if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name) {
                     item.sourceTreeUri ?: job.sourceTree
                 } else {
@@ -168,11 +174,17 @@ class PersistentImagePublisher @Inject constructor(
                     ?: throw IOException("Output folder unavailable.")
                 check(directory.isDirectory && directory.canRead() && directory.canWrite()) { "Output access revoked; select an accessible folder for a new batch." }
                 if (job.destinationMode == OutputDestinationMode.SUBFOLDER.name && job.outputTree == null) {
-                    directory = directory.findFile("Optimized") ?: directory.createDirectory("Optimized")
-                            ?: throw IOException("Cannot create Optimized folder.")
+                    directory = PerformanceTracker.trackStage(PerformanceStage.DIRECTORY_QUERY) {
+                        PerformanceTracker.incrementCounter(PerformanceCounter.DIRECTORY_QUERIES)
+                        directory.findFile("Optimized") ?: directory.createDirectory("Optimized")
+                    } ?: throw IOException("Cannot create Optimized folder.")
                 }
                 val extension = item.details(job.options().processingMode).format.extension
-                val existingDocs = directory.listFiles()
+                val existingDocs = PerformanceTracker.trackStage(PerformanceStage.DIRECTORY_QUERY) {
+                    PerformanceTracker.incrementCounter(PerformanceCounter.DIRECTORY_QUERIES)
+                    PerformanceTracker.incrementCounter(PerformanceCounter.CHILD_DIRECTORY_QUERIES)
+                    directory.listFiles()
+                }
                 val existingNames = existingDocs.mapNotNull { it.name }.toSet()
                 val name = optimizedOutputName(item.name, extension, existingNames)
                 val mime = when (extension) {
@@ -180,7 +192,10 @@ class PersistentImagePublisher @Inject constructor(
                 }
                 val existing =
                     item.outputUri?.let { DocumentFile.fromSingleUri(context, it.toUri()) }
-                        ?.takeIf { it.exists() } ?: directory.findFile(name)
+                        ?.takeIf { it.exists() } ?: PerformanceTracker.trackStage(PerformanceStage.DIRECTORY_QUERY) {
+                            PerformanceTracker.incrementCounter(PerformanceCounter.DIRECTORY_QUERIES)
+                            directory.findFile(name)
+                        }
                 val before =
                     if (existing == null) existingDocs.map { it.uri } else emptyList()
                 val document = existing ?: directory.createFile(mime, name)
@@ -237,9 +252,16 @@ class PersistentImagePublisher @Inject constructor(
             // Complete write + validation + DB commit as one interruption-safe section.
             withContext(NonCancellable) {
                 try {
-                    resolver.openOutputStream(output.uri, "wt")
-                        ?.use { out -> candidate.inputStream().use { it.copyTo(out) } }
-                        ?: throw IOException("Cannot write output.")
+                    PerformanceTracker.trackStage(PerformanceStage.PUBLICATION_COPY) {
+                        resolver.openOutputStream(output.uri, "wt")
+                            ?.use { out ->
+                                candidate.inputStream().use { input ->
+                                    val copied = input.copyTo(out)
+                                    PerformanceTracker.incrementCounter(PerformanceCounter.BYTES_WRITTEN, copied)
+                                }
+                            }
+                            ?: throw IOException("Cannot write output.")
+                    }
                     val actual = resolver.openInputStream(output.uri)?.use { fingerprint(it) }
                         ?: throw IOException("Cannot verify output.")
                     check(actual.first == expected.first && actual.second.contentEquals(expected.second)) { "Output verification failed." }
@@ -263,19 +285,21 @@ class PersistentImagePublisher @Inject constructor(
             }
         }
 
-    private fun fingerprint(stream: java.io.InputStream): Pair<Long, ByteArray> {
-        val hash = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(65536)
-        var count = 0L
-        while (true) {
-            val read = stream.read(buffer); if (read < 0) break; hash.update(
-                buffer,
-                0,
-                read
-            ); count += read
+    private fun fingerprint(stream: java.io.InputStream): Pair<Long, ByteArray> =
+        PerformanceTracker.trackStage(PerformanceStage.DESTINATION_VERIFICATION) {
+            val hash = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(65536)
+            var count = 0L
+            while (true) {
+                val read = stream.read(buffer); if (read < 0) break; hash.update(
+                    buffer,
+                    0,
+                    read
+                ); count += read
+            }
+            PerformanceTracker.incrementCounter(PerformanceCounter.BYTES_READ, count)
+            count to hash.digest()
         }
-        return count to hash.digest()
-    }
 
     private fun reservedName(job: BatchJob, item: BatchItem): String {
         val extension = item.details(job.options().processingMode).format.extension

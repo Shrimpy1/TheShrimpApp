@@ -629,16 +629,26 @@ class PngLosslessOptimizer @Inject constructor(
     }.getOrNull()
 
     private fun copyUriToFile(uri: Uri, destination: File) {
-        val input = contentResolver.openInputStream(uri)
-            ?: throw IllegalStateException("Could not open the source URI for reading.")
+        val input = if (uri.scheme == "file") {
+            val path = uri.path ?: throw IllegalStateException("Could not open source file.")
+            FileInputStream(File(path))
+        } else {
+            contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("Could not open the source URI for reading.")
+        }
         input.use { source ->
             BufferedOutputStream(FileOutputStream(destination)).use { output -> source.copyTo(output, COPY_BUFFER_SIZE) }
         }
     }
 
     private fun writeFileToUri(source: File, destinationUri: Uri) {
-        val output = contentResolver.openOutputStream(destinationUri, "wt")
-            ?: throw IllegalStateException("Could not open the output URI for writing.")
+        val output = if (destinationUri.scheme == "file") {
+            val path = destinationUri.path ?: throw IllegalStateException("Could not open output file.")
+            FileOutputStream(File(path))
+        } else {
+            contentResolver.openOutputStream(destinationUri, "wt")
+                ?: throw IllegalStateException("Could not open the output URI for writing.")
+        }
         output.use { destination ->
             BufferedInputStream(FileInputStream(source)).use { input -> input.copyTo(destination, COPY_BUFFER_SIZE) }
             destination.flush()

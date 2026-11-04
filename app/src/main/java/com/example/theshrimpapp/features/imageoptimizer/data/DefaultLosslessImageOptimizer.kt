@@ -51,8 +51,12 @@ class DefaultLosslessImageOptimizer @Inject constructor(
     }
 
     private fun detectFormat(uri: Uri): InputFormat? {
-        val input = contentResolver.openInputStream(uri)
-            ?: throw IOException("Could not open the selected image.")
+        val input = if (uri.scheme == "file") {
+            val path = uri.path ?: throw IOException("Invalid file URI")
+            java.io.File(path).inputStream()
+        } else {
+            contentResolver.openInputStream(uri)
+        } ?: throw IOException("Could not open the selected image.")
         input.use { stream ->
             val header = ByteArray(12)
             var offset = 0

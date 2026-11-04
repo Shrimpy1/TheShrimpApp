@@ -16,6 +16,8 @@ import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingRe
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessor
 import com.example.theshrimpapp.features.imageoptimizer.domain.LosslessImageOptimizer
 import com.example.theshrimpapp.features.imageoptimizer.domain.OutputFormat
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceStage
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceTracker
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -74,7 +76,11 @@ class DefaultImageProcessor @Inject constructor(
 
         try {
             // 1. Read bounds and EXIF orientation
-            val (srcWidth, srcHeight, exifOrientation) = readImageInfo(inputUri)
+            val (srcWidth, srcHeight, exifOrientation) = PerformanceTracker.trackStage(
+                PerformanceStage.BOUNDS_EXIF
+            ) {
+                readImageInfo(inputUri)
+            }
             if (srcWidth <= 0 || srcHeight <= 0) {
                 return@withContext ImageProcessingResult.Failed("Could not read valid image dimensions.")
             }
@@ -123,16 +129,19 @@ class DefaultImageProcessor @Inject constructor(
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
 
-            val decodedBitmap = contentResolver.openInputStream(inputUri)?.use { stream ->
-                BitmapFactory.decodeStream(stream, null, decodeOptions)
+            val decodedBitmap = PerformanceTracker.trackStage(PerformanceStage.DECODE) {
+                openInputStream(inputUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, decodeOptions)
+                }
             }
                 ?: return@withContext ImageProcessingResult.Failed("Could not open input stream for decoding.")
             ownedBitmaps.add(decodedBitmap)
 
             // CHANGED: Apply EXIF orientation first, then resize from the oriented dimensions.
             // Keeping these as separate operations prevents rotated images from being stretched.
-            val transformedBitmap =
+            val transformedBitmap = PerformanceTracker.trackStage(PerformanceStage.TRANSFORM) {
                 transformBitmap(decodedBitmap, exifOrientation, targetWidth, targetHeight)
+            }
             ownedBitmaps.add(transformedBitmap)
             if (transformedBitmap !== decodedBitmap) {
                 decodedBitmap.recycle()
@@ -140,7 +149,9 @@ class DefaultImageProcessor @Inject constructor(
 
             // 6. Handle JPEG transparency background compositing if needed
             val finalBitmap = if (options.outputFormat == OutputFormat.JPEG) {
-                compositeBackground(transformedBitmap, options.backgroundColor)
+                PerformanceTracker.trackStage(PerformanceStage.TRANSFORM) {
+                    compositeBackground(transformedBitmap, options.backgroundColor)
+                }
             } else {
                 transformedBitmap
             }
@@ -154,16 +165,20 @@ class DefaultImageProcessor @Inject constructor(
             val quality =
                 if (options.outputFormat.supportsQuality) options.quality.coerceIn(1, 100) else 100
 
-            FileOutputStream(tempCandidateFile).use { fos ->
-                if (!finalBitmap.compress(compressFormat, quality, fos)) {
-                    throw IOException("Image encoding failed.")
+            PerformanceTracker.trackStage(PerformanceStage.ENCODE) {
+                FileOutputStream(tempCandidateFile).use { fos ->
+                    if (!finalBitmap.compress(compressFormat, quality, fos)) {
+                        throw IOException("Image encoding failed.")
+                    }
                 }
             }
             finalBitmap.recycle()
 
             // CHANGED: Reattach source EXIF metadata after Bitmap.compress() re-encodes the pixels.
             // The orientation tag is reset because the pixels have already been transformed.
-            copyExifMetadata(inputUri, tempCandidateFile, targetWidth, targetHeight)
+            PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
+                copyExifMetadata(inputUri, tempCandidateFile, targetWidth, targetHeight)
+            }
 
             val preOptSize = tempCandidateFile.length()
             if (preOptSize <= 0) {
@@ -172,16 +187,18 @@ class DefaultImageProcessor @Inject constructor(
 
             // 8. Lossless post-optimization stage on final encoded candidate
             var winningFile = tempCandidateFile
-            val postOptResult = try {
-                losslessImageOptimizer.optimize(
-                    Uri.fromFile(tempCandidateFile),
-                    Uri.fromFile(tempPostOptFile),
-                    options
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                null // Keep the valid encoded candidate if optional post-optimization fails.
+            val postOptResult = PerformanceTracker.trackStage(PerformanceStage.POST_OPTIMIZATION) {
+                try {
+                    losslessImageOptimizer.optimize(
+                        Uri.fromFile(tempCandidateFile),
+                        Uri.fromFile(tempPostOptFile),
+                        options
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null // Keep the valid encoded candidate if optional post-optimization fails.
+                }
             }
 
             if (postOptResult is ImageOptimizationResult.Optimized) {
@@ -194,12 +211,14 @@ class DefaultImageProcessor @Inject constructor(
             // CHANGED: Ensure the chosen post-optimized candidate still carries source EXIF.
             // Some format-specific optimizers may rewrite metadata while optimizing the stream.
             if (winningFile !== tempCandidateFile) {
-                copyExifMetadata(inputUri, winningFile, targetWidth, targetHeight)
+                PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
+                    copyExifMetadata(inputUri, winningFile, targetWidth, targetHeight)
+                }
             }
 
             // 9. Write winning file to target outputUri
             val finalOutputBytes = winningFile.length()
-            contentResolver.openOutputStream(outputUri, "wt")?.use { outputStream ->
+            openOutputStream(outputUri)?.use { outputStream ->
                 winningFile.inputStream().use { inputStream ->
                     inputStream.copyTo(outputStream)
                 }
@@ -238,9 +257,31 @@ class DefaultImageProcessor @Inject constructor(
         }
     }
 
+    private fun openInputStream(uri: Uri): java.io.InputStream? {
+        return if (uri.scheme == "file") {
+            val path = uri.path ?: return null
+            File(path).inputStream()
+        } else {
+            contentResolver.openInputStream(uri)
+        }
+    }
+
+    private fun openOutputStream(uri: Uri): java.io.OutputStream? {
+        return if (uri.scheme == "file") {
+            val path = uri.path ?: return null
+            File(path).outputStream()
+        } else {
+            contentResolver.openOutputStream(uri, "wt")
+        }
+    }
+
     private fun getFileSize(uri: Uri): Long {
         return try {
-            contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
+            if (uri.scheme == "file") {
+                File(uri.path ?: return 0L).length()
+            } else {
+                contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
+            }
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             throw cancel
         } catch (_: Exception) {
@@ -253,14 +294,14 @@ class DefaultImageProcessor @Inject constructor(
         var height = 0
         var orientation = ExifInterface.ORIENTATION_NORMAL
 
-        contentResolver.openInputStream(uri)?.use { stream ->
+        openInputStream(uri)?.use { stream ->
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeStream(stream, null, options)
             width = options.outWidth
             height = options.outHeight
         }
 
-        contentResolver.openInputStream(uri)?.use { stream ->
+        openInputStream(uri)?.use { stream ->
             val exif = ExifInterface(stream)
             orientation = exif.getAttributeInt(
                 ExifInterface.TAG_ORIENTATION,
@@ -355,7 +396,7 @@ class DefaultImageProcessor @Inject constructor(
         outputWidth: Int,
         outputHeight: Int
     ) {
-        val sourceExif = contentResolver.openInputStream(inputUri)?.use { inputStream ->
+        val sourceExif = openInputStream(inputUri)?.use { inputStream ->
             ExifInterface(inputStream)
         } ?: throw IOException("Could not read source metadata.")
 

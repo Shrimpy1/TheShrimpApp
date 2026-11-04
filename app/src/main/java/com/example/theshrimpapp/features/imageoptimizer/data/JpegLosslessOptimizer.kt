@@ -222,12 +222,22 @@ class JpegLosslessOptimizer @Inject constructor(
     }.getOrNull()
 
     private fun copyUriToFile(uri: Uri, destination: File) {
-        val input = contentResolver.openInputStream(uri) ?: throw IOException("Could not open source URI.")
+        val input = if (uri.scheme == "file") {
+            val path = uri.path ?: throw IOException("Could not open source file.")
+            FileInputStream(File(path))
+        } else {
+            contentResolver.openInputStream(uri) ?: throw IOException("Could not open source URI.")
+        }
         input.use { source -> BufferedOutputStream(FileOutputStream(destination)).use { output -> source.copyTo(output, IO_BUFFER_SIZE) } }
     }
 
     private fun writeFileToUri(source: File, destinationUri: Uri) {
-        val output = contentResolver.openOutputStream(destinationUri, "wt") ?: throw IOException("Could not open output URI.")
+        val output = if (destinationUri.scheme == "file") {
+            val path = destinationUri.path ?: throw IOException("Could not open output file.")
+            FileOutputStream(File(path))
+        } else {
+            contentResolver.openOutputStream(destinationUri, "wt") ?: throw IOException("Could not open output URI.")
+        }
         output.use { destination ->
             BufferedInputStream(FileInputStream(source)).use { input -> input.copyTo(destination, IO_BUFFER_SIZE) }
             destination.flush()

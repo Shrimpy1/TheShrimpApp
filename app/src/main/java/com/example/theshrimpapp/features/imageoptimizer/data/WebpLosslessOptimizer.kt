@@ -545,8 +545,12 @@ class WebpLosslessOptimizer @Inject constructor(
     }.getOrNull()
 
     private fun copyUriToFile(uri: Uri, destination: File) {
-        val input =
+        val input = if (uri.scheme == "file") {
+            val path = uri.path ?: throw IOException("Could not open source file.")
+            FileInputStream(File(path))
+        } else {
             contentResolver.openInputStream(uri) ?: throw IOException("Could not open source URI.")
+        }
         input.use { source ->
             BufferedOutputStream(FileOutputStream(destination)).use { it ->
                 source.copyTo(
@@ -558,8 +562,13 @@ class WebpLosslessOptimizer @Inject constructor(
     }
 
     private fun writeFileToUri(source: File, destinationUri: Uri) {
-        val output = contentResolver.openOutputStream(destinationUri, "wt")
-            ?: throw IOException("Could not open output URI.")
+        val output = if (destinationUri.scheme == "file") {
+            val path = destinationUri.path ?: throw IOException("Could not open output file.")
+            FileOutputStream(File(path))
+        } else {
+            contentResolver.openOutputStream(destinationUri, "wt")
+                ?: throw IOException("Could not open output URI.")
+        }
         output.use { destination ->
             BufferedInputStream(FileInputStream(source)).use { it ->
                 it.copyTo(

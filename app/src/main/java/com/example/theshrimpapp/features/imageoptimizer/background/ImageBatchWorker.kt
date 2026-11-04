@@ -17,6 +17,9 @@ import androidx.work.workDataOf
 import com.example.theshrimpapp.MainActivity
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessingResult
 import com.example.theshrimpapp.features.imageoptimizer.domain.ImageProcessor
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceCounter
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceStage
+import com.example.theshrimpapp.features.imageoptimizer.domain.PerformanceTracker
 import com.example.theshrimpapp.features.imageoptimizer.domain.ProcessingMode
 import com.example.theshrimpapp.features.imageoptimizer.domain.SequentialBatchProcessor
 import dagger.assisted.Assisted
@@ -72,10 +75,13 @@ class ImageBatchWorker @AssistedInject constructor(
                     process = { processItem(job, it) },
                     failure = { throw it },
                     onProgress = {
-                        val items = dao.items(jobId)
-                        val completed = items.count { it.terminal && it.state != "CANCELLED" }
-                        setProgress(workDataOf("completed" to completed, "total" to items.size))
-                        safeSetForeground(notification(items))
+                        PerformanceTracker.trackStage(PerformanceStage.PROGRESS_CALLBACK) {
+                            PerformanceTracker.incrementCounter(PerformanceCounter.PROGRESS_CALLBACKS)
+                            val items = dao.items(jobId)
+                            val completed = items.count { it.terminal && it.state != "CANCELLED" }
+                            setProgress(workDataOf("completed" to completed, "total" to items.size))
+                            safeSetForeground(notification(items))
+                        }
                     })
                 withContext(NonCancellable) {
                     val finalStatus = if (dao.job(jobId)?.cancelRequested == true) {
