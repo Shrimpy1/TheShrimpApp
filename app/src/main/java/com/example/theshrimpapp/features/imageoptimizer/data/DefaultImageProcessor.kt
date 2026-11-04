@@ -7,6 +7,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.net.Uri
+import android.os.Build
+import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
@@ -26,6 +28,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.lang.reflect.Modifier
 import javax.inject.Inject
 
@@ -34,6 +38,44 @@ class DefaultImageProcessor @Inject constructor(
     private val contentResolver: ContentResolver,
     private val losslessImageOptimizer: LosslessImageOptimizer
 ) : ImageProcessor {
+
+    data class ImageMetadataSnapshot(
+        val width: Int,
+        val height: Int,
+        val orientation: Int,
+        val attributes: Map<String, String>
+    )
+
+    companion object {
+        private val EXIF_TAG_NAMES: List<String> by lazy {
+            ExifInterface::class.java.fields
+                .asSequence()
+                .filter { field ->
+                    field.name.startsWith("TAG_") &&
+                            field.type == String::class.java &&
+                            Modifier.isStatic(field.modifiers)
+                }
+                .mapNotNull { field -> cancellationAwareRunCatching { field.get(null) as? String }.getOrNull() }
+                .distinct()
+                .toList()
+        }
+
+        private val EXIF_SKIP_TAGS = setOf(
+            ExifInterface.TAG_ORIENTATION,
+            "JPEGInterchangeFormat",
+            "JPEGInterchangeFormatLength",
+            "StripOffsets",
+            "StripByteCounts",
+            "TileOffsets",
+            "TileByteCounts",
+            "ThumbnailImageWidth",
+            "ThumbnailImageLength",
+            "ThumbnailOrientation",
+            "ThumbnailImage",
+            "MakerNote",
+            "Xmp"
+        )
+    }
 
     override suspend fun process(
         inputUri: Uri,
@@ -75,12 +117,14 @@ class DefaultImageProcessor @Inject constructor(
         val ownedBitmaps = mutableListOf<Bitmap>()
 
         try {
-            // 1. Read bounds and EXIF orientation
-            val (srcWidth, srcHeight, exifOrientation) = PerformanceTracker.trackStage(
-                PerformanceStage.BOUNDS_EXIF
-            ) {
-                readImageInfo(inputUri)
+            // 1. Read bounds and EXIF orientation / attributes once
+            val metadata = PerformanceTracker.trackStage(PerformanceStage.BOUNDS_EXIF) {
+                readImageMetadata(inputUri, options.preserveMetadata)
             }
+            val srcWidth = metadata.width
+            val srcHeight = metadata.height
+            val exifOrientation = metadata.orientation
+
             if (srcWidth <= 0 || srcHeight <= 0) {
                 return@withContext ImageProcessingResult.Failed("Could not read valid image dimensions.")
             }
@@ -115,7 +159,6 @@ class DefaultImageProcessor @Inject constructor(
             }
 
             // 3. Calculate sample size for efficient decoding
-            // CHANGED: Translate oriented target dimensions back to encoded-image axes before sampling.
             val sampleTargetWidth = if (swapped) targetHeight else targetWidth
             val sampleTargetHeight = if (swapped) targetWidth else targetHeight
             val sampleSize = calculateSampleSize(
@@ -137,8 +180,7 @@ class DefaultImageProcessor @Inject constructor(
                 ?: return@withContext ImageProcessingResult.Failed("Could not open input stream for decoding.")
             ownedBitmaps.add(decodedBitmap)
 
-            // CHANGED: Apply EXIF orientation first, then resize from the oriented dimensions.
-            // Keeping these as separate operations prevents rotated images from being stretched.
+            // 5. Transform bitmap (orientation + resize)
             val transformedBitmap = PerformanceTracker.trackStage(PerformanceStage.TRANSFORM) {
                 transformBitmap(decodedBitmap, exifOrientation, targetWidth, targetHeight)
             }
@@ -174,10 +216,15 @@ class DefaultImageProcessor @Inject constructor(
             }
             finalBitmap.recycle()
 
-            // CHANGED: Reattach source EXIF metadata after Bitmap.compress() re-encodes the pixels.
-            // The orientation tag is reset because the pixels have already been transformed.
+            // 8. Apply metadata once using the cached snapshot
             PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
-                copyExifMetadata(inputUri, tempCandidateFile, targetWidth, targetHeight)
+                applyExifMetadata(
+                    metadata,
+                    tempCandidateFile,
+                    targetWidth,
+                    targetHeight,
+                    options.preserveMetadata
+                )
             }
 
             val preOptSize = tempCandidateFile.length()
@@ -185,7 +232,7 @@ class DefaultImageProcessor @Inject constructor(
                 return@withContext ImageProcessingResult.Failed("Failed to encode image output.")
             }
 
-            // 8. Lossless post-optimization stage on final encoded candidate
+            // 9. Lossless post-optimization stage on final encoded candidate
             var winningFile = tempCandidateFile
             val postOptResult = PerformanceTracker.trackStage(PerformanceStage.POST_OPTIMIZATION) {
                 try {
@@ -208,15 +255,20 @@ class DefaultImageProcessor @Inject constructor(
                 }
             }
 
-            // CHANGED: Ensure the chosen post-optimized candidate still carries source EXIF.
-            // Some format-specific optimizers may rewrite metadata while optimizing the stream.
+            // If winningFile is post-optimized file, ensure metadata is applied/retained
             if (winningFile !== tempCandidateFile) {
                 PerformanceTracker.trackStage(PerformanceStage.EXIF_SAVE) {
-                    copyExifMetadata(inputUri, winningFile, targetWidth, targetHeight)
+                    applyExifMetadata(
+                        metadata,
+                        winningFile,
+                        targetWidth,
+                        targetHeight,
+                        options.preserveMetadata
+                    )
                 }
             }
 
-            // 9. Write winning file to target outputUri
+            // 10. Write winning file to target outputUri
             val finalOutputBytes = winningFile.length()
             openOutputStream(outputUri)?.use { outputStream ->
                 winningFile.inputStream().use { inputStream ->
@@ -246,7 +298,7 @@ class DefaultImageProcessor @Inject constructor(
             throw e
         } catch (_: OutOfMemoryError) {
             ImageProcessingResult.Failed("Not enough memory to process this image. Try a smaller dimension.")
-        } catch (cancel: kotlinx.coroutines.CancellationException) {
+        } catch (cancel: CancellationException) {
             throw cancel
         } catch (e: Exception) {
             ImageProcessingResult.Failed(e.localizedMessage ?: "Unknown processing error occurred.")
@@ -257,7 +309,7 @@ class DefaultImageProcessor @Inject constructor(
         }
     }
 
-    private fun openInputStream(uri: Uri): java.io.InputStream? {
+    private fun openInputStream(uri: Uri): InputStream? {
         return if (uri.scheme == "file") {
             val path = uri.path ?: return null
             File(path).inputStream()
@@ -266,7 +318,7 @@ class DefaultImageProcessor @Inject constructor(
         }
     }
 
-    private fun openOutputStream(uri: Uri): java.io.OutputStream? {
+    private fun openOutputStream(uri: Uri): OutputStream? {
         return if (uri.scheme == "file") {
             val path = uri.path ?: return null
             File(path).outputStream()
@@ -282,17 +334,18 @@ class DefaultImageProcessor @Inject constructor(
             } else {
                 contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
             }
-        } catch (cancel: kotlinx.coroutines.CancellationException) {
+        } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) {
             0L
         }
     }
 
-    private fun readImageInfo(uri: Uri): Triple<Int, Int, Int> {
+    private fun readImageMetadata(uri: Uri, preserveMetadata: Boolean): ImageMetadataSnapshot {
         var width = 0
         var height = 0
         var orientation = ExifInterface.ORIENTATION_NORMAL
+        val attributes = mutableMapOf<String, String>()
 
         openInputStream(uri)?.use { stream ->
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -307,9 +360,18 @@ class DefaultImageProcessor @Inject constructor(
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_NORMAL
             )
+            if (preserveMetadata) {
+                for (tag in EXIF_TAG_NAMES) {
+                    if (tag in EXIF_SKIP_TAGS) continue
+                    val value = cancellationAwareRunCatching { exif.getAttribute(tag) }.getOrNull()
+                    if (value != null) {
+                        attributes[tag] = value
+                    }
+                }
+            }
         }
 
-        return Triple(width, height, orientation)
+        return ImageMetadataSnapshot(width, height, orientation, attributes)
     }
 
     private fun calculateSampleSize(
@@ -390,54 +452,17 @@ class DefaultImageProcessor @Inject constructor(
     // CHANGED: BitmapFactory/Bitmap.compress() discard source EXIF. Copy readable EXIF
     // attributes to the encoded temporary file, update dimension tags, and clear orientation
     // because the image pixels have already been rotated/reflected.
-    private fun copyExifMetadata(
-        inputUri: Uri,
+    private fun applyExifMetadata(
+        snapshot: ImageMetadataSnapshot,
         outputFile: File,
         outputWidth: Int,
-        outputHeight: Int
+        outputHeight: Int,
+        preserveMetadata: Boolean
     ) {
-        val sourceExif = openInputStream(inputUri)?.use { inputStream ->
-            ExifInterface(inputStream)
-        } ?: throw IOException("Could not read source metadata.")
+        if (!preserveMetadata || snapshot.attributes.isEmpty()) return
 
         val outputExif = ExifInterface(outputFile.absolutePath)
-        val skipTags = setOf(
-            ExifInterface.TAG_ORIENTATION,
-            "JPEGInterchangeFormat",
-            "JPEGInterchangeFormatLength",
-            "StripOffsets",
-            "StripByteCounts",
-            "TileOffsets",
-            "TileByteCounts",
-            // These refer to source-embedded thumbnails or maker-specific/binary data that
-            // cannot safely be transplanted after the pixels are re-encoded.
-            "ThumbnailImageWidth",
-            "ThumbnailImageLength",
-            "ThumbnailOrientation",
-            "ThumbnailImage",
-            "MakerNote",
-            "Xmp"
-        )
-
-        // ExifInterface has no public API to enumerate only present attributes, so inspect its
-        // public TAG_* constants and copy values that actually exist. A tag rejected by the
-        // destination format is skipped; saving the resulting metadata is still required.
-        val tagNames = ExifInterface::class.java.fields
-            .asSequence()
-            .filter { field ->
-                field.name.startsWith("TAG_") &&
-                        field.type == String::class.java &&
-                        Modifier.isStatic(field.modifiers)
-            }
-            .mapNotNull { field -> cancellationAwareRunCatching { field.get(null) as? String }.getOrNull() }
-            .distinct()
-            .toList()
-
-        val copiedTags = mutableSetOf<String>()
-        for (tag in tagNames) {
-            if (tag in skipTags) continue
-            val value = cancellationAwareRunCatching { sourceExif.getAttribute(tag) }.getOrNull()
-                ?: continue
+        for ((tag, value) in snapshot.attributes) {
             val valueToWrite = when (tag) {
                 ExifInterface.TAG_IMAGE_WIDTH,
                 ExifInterface.TAG_PIXEL_X_DIMENSION -> outputWidth.toString()
@@ -447,18 +472,10 @@ class DefaultImageProcessor @Inject constructor(
 
                 else -> value
             }
-            if (cancellationAwareRunCatching {
-                    outputExif.setAttribute(
-                        tag,
-                        valueToWrite
-                    )
-                }.isSuccess) {
-                copiedTags += tag
+            cancellationAwareRunCatching {
+                outputExif.setAttribute(tag, valueToWrite)
             }
         }
-
-        // No readable EXIF attributes means there is nothing to preserve; don't add an empty block.
-        if (copiedTags.isEmpty()) return
 
         outputExif.setAttribute(
             ExifInterface.TAG_ORIENTATION,
@@ -469,7 +486,7 @@ class DefaultImageProcessor @Inject constructor(
 
     private fun compositeBackground(
         bitmap: Bitmap,
-        backgroundColor: androidx.compose.ui.graphics.Color
+        backgroundColor: Color
     ): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
@@ -495,14 +512,14 @@ class DefaultImageProcessor @Inject constructor(
     private fun mapCompressFormat(format: OutputFormat): Bitmap.CompressFormat {
         return when (format) {
             OutputFormat.JPEG -> Bitmap.CompressFormat.JPEG
-            OutputFormat.WEBP_LOSSY -> if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            OutputFormat.WEBP_LOSSY -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Bitmap.CompressFormat.WEBP_LOSSY
             } else {
                 @Suppress("DEPRECATION")
                 Bitmap.CompressFormat.WEBP
             }
 
-            OutputFormat.WEBP_LOSSLESS -> if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            OutputFormat.WEBP_LOSSLESS -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Bitmap.CompressFormat.WEBP_LOSSLESS
             } else {
                 @Suppress("DEPRECATION")
